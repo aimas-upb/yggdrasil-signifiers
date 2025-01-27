@@ -7,13 +7,6 @@
   "notification-config" : {
     "enabled" : true
   },
-  "agents" : [
-    {
-      "name" : "test_agent",
-      "agent-uri" : "http://localhost:8080/agents/test",
-      "callback-uri" : "http://localhost:8081/"
-    }
-  ],
   "environment-config" : {
     "known-artifacts" : [
       {
@@ -31,11 +24,9 @@
             "class" : "http://example.org/Counter",
             "init-params" : [
               5
-            ],
-            "focused-by" : ["test_agent"]
+            ]
           }
-        ],
-        "joined-by" : ["test_agent"]
+        ]
       },
       {
         "name" : "test"

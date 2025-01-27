@@ -9,36 +9,37 @@
   },
   "agents" : [
     {
-      "name" : "test_agent",
-      "agent-uri" : "http://localhost:8080/agents/test",
+      "name" : "alex_agent",
+      "agent-uri" : "http://localhost:8080/agents/alex",
       "callback-uri" : "http://localhost:8081/"
     }
   ],
   "environment-config" : {
     "known-artifacts" : [
       {
-        "class" : "http://example.org/Counter",
-        "template" : "org.hyperagents.yggdrasil.cartago.artifacts.CounterTD"
+        "class" : "http://example.org/HueLamp",
+        "template" : "org.hyperagents.yggdrasil.cartago.artifacts.HueLampTD"
       }
     ],
     "workspaces" : [
       {
-        "name" : "sub",
-        "parent-name" : "test",
+        "name" : "lab308",
+        "parent-name" : "precis",
         "artifacts" : [
           {
-            "name" : "c0",
-            "class" : "http://example.org/Counter",
+            "name" : "light308",
+            "class" : "http://example.org/HueLamp",
             "init-params" : [
-              5
+              "off",
+              "blue"
             ],
-            "focused-by" : ["test_agent"]
+            "focused-by" : ["alex_agent"]
           }
         ],
-        "joined-by" : ["test_agent"]
+        "joined-by" : ["alex_agent"]
       },
       {
-        "name" : "test"
+        "name" : "precis"
       }
     ],
     "enabled" : true,

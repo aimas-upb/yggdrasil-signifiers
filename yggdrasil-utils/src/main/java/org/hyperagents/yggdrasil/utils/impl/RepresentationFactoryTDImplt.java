@@ -1,5 +1,21 @@
 package org.hyperagents.yggdrasil.utils.impl;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Set;
+
+import org.eclipse.rdf4j.model.Model;
+import org.eclipse.rdf4j.model.impl.LinkedHashModel;
+import org.eclipse.rdf4j.model.vocabulary.RDF;
+import org.hyperagents.yggdrasil.utils.HttpInterfaceConfig;
+import org.hyperagents.yggdrasil.utils.RdfModelUtils;
+import org.hyperagents.yggdrasil.utils.RepresentationFactory;
+import org.hyperagents.yggdrasil.utils.WebSubConfig;
+
+import com.google.common.collect.ListMultimap;
+import com.google.common.collect.Multimaps;
+
 import ch.unisg.ics.interactions.wot.td.ThingDescription;
 import ch.unisg.ics.interactions.wot.td.affordances.ActionAffordance;
 import ch.unisg.ics.interactions.wot.td.affordances.Form;
@@ -8,20 +24,7 @@ import ch.unisg.ics.interactions.wot.td.schemas.ArraySchema;
 import ch.unisg.ics.interactions.wot.td.schemas.ObjectSchema;
 import ch.unisg.ics.interactions.wot.td.schemas.StringSchema;
 import ch.unisg.ics.interactions.wot.td.security.SecurityScheme;
-import com.google.common.collect.ListMultimap;
-import com.google.common.collect.Multimaps;
 import io.vertx.core.http.HttpMethod;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Set;
-import org.eclipse.rdf4j.model.Model;
-import org.eclipse.rdf4j.model.impl.LinkedHashModel;
-import org.eclipse.rdf4j.model.vocabulary.RDF;
-import org.hyperagents.yggdrasil.utils.HttpInterfaceConfig;
-import org.hyperagents.yggdrasil.utils.RdfModelUtils;
-import org.hyperagents.yggdrasil.utils.RepresentationFactory;
-import org.hyperagents.yggdrasil.utils.WebSubConfig;
 
 /**
  * This class is an implementation of the RepresentationFactory interface. It provides methods to
@@ -379,6 +382,9 @@ public class RepresentationFactoryTDImplt implements RepresentationFactory {
         .setNamespace("ex", "http://example.org/")
         .setNamespace("jacamo", JACAMO)
         .setNamespace(WEBSUB, HMAS + "websub/")
+        .setNamespace("cashmere", "https://aimas.cs.pub.ro/ont/cashmere#")
+        .setNamespace("acl", "http://www.w3.org/ns/auth/acl#")
+        .setNamespace("consert", "http://pervasive.semanticweb.org/ont/2017/07/consert/core#")
         .write();
   }
 }

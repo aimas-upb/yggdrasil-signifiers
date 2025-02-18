@@ -39,8 +39,12 @@ jacoco {
 }
 
 java {
-  sourceCompatibility = JavaVersion.VERSION_23
-  targetCompatibility = JavaVersion.VERSION_23
+  toolchain {
+    languageVersion.set(JavaLanguageVersion.of(23))
+    vendor.set(JvmVendorSpec.ORACLE) // Optional: Specify vendor (e.g., Oracle, OpenJDK)
+  }
+  sourceCompatibility = JavaVersion.VERSION_21
+  targetCompatibility = JavaVersion.VERSION_21
 }
 
 allprojects {
@@ -59,6 +63,7 @@ dependencies {
   implementation(project(":yggdrasil-core"))
   implementation(project(":yggdrasil-cartago"))
   implementation(project(":yggdrasil-websub"))
+  // implementation(project(":yggdrasil-context"))
 
   implementation(libs.vertx.core)
   implementation(libs.vertx.config)

@@ -27,28 +27,46 @@ jacoco {
 
 java {
   toolchain {
-      languageVersion.set(JavaLanguageVersion.of(23))
-      vendor.set(JvmVendorSpec.ORACLE) // Optional: Specify vendor (e.g., Oracle, OpenJDK)
+    languageVersion.set(JavaLanguageVersion.of(23))
+    vendor.set(JvmVendorSpec.ORACLE) // Optional: Specify vendor (e.g., Oracle, OpenJDK)
   }
   sourceCompatibility = JavaVersion.VERSION_21
   targetCompatibility = JavaVersion.VERSION_21
 }
 
 dependencies {
+  implementation(project(":yggdrasil-core"))
   implementation(project(":yggdrasil-utils"))
-
+  implementation(project(":yggdrasil-cartago"))
+  implementation(files("${rootProject.projectDir}/libs/cartago-3.2-SNAPSHOT-all.jar"))
+  
   implementation(libs.log4j.core)
   implementation(libs.vertx.core)
+  implementation(libs.vertx.config)
+  implementation(libs.vertx.web)
+  implementation(libs.vertx.web.client)
+
+  implementation(libs.wot.td.java)
 
   implementation(libs.httpcomponents.core5)
 
-  implementation(files("${rootProject.projectDir}/libs/cartago-3.2-SNAPSHOT-all.jar"))
-  implementation(libs.wot.td.java)
-  implementation(libs.hmas.java)
+  implementation(libs.guava)
+  implementation(libs.gson)
 
   implementation(libs.rdf4j.model)
+  implementation(libs.rdf4j.repository.sail)
+  implementation(libs.rdf4j.sail.memory)
+  implementation(libs.rdf4j.sail.nativerdf)
+  implementation(libs.rdf4j.queryresultio.sparqljson)
+  implementation(libs.rdf4j.queryresultio.text)
+  implementation(libs.rdf4j.repository.manager)
+  implementation(libs.rdf4j.repository.sparql)
+  implementation(libs.rdf4j.shacl)
+  implementation(libs.rdf4j.rio.trig)
 
-  implementation(libs.gson)
+  implementation(libs.rsp4j.csparql2)
+  implementation(libs.rsp4j.web)
+  implementation(libs.rsp4j.api)
 
   implementation(libs.apache.commons.lang3)
 
@@ -59,9 +77,8 @@ dependencies {
   testImplementation(platform(libs.junit.platform))
   testImplementation(libs.junit.jupiter)
   testImplementation(libs.vertx.junit5)
-
-  testImplementation(libs.httpcomponents.httpclient5)
-  testImplementation(libs.httpcomponents.httpclient5.fluent)
+  testImplementation(libs.xmlunit.core)
+  testImplementation(libs.xmlunit.matchers)
 
   testCompileOnly(libs.spotbugs.annotations)
 }

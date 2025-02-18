@@ -111,6 +111,7 @@ public class HttpEntityHandler implements HttpEntityHandlerInterface {
    *
    * @param routingContext the routingContext
    */
+  @SuppressWarnings("override")
   public void handleRedirectWithoutSlash(final RoutingContext routingContext) {
     final var requestUri = routingContext.request().absoluteURI();
 
@@ -127,6 +128,7 @@ public class HttpEntityHandler implements HttpEntityHandlerInterface {
    *
    * @param routingContext the routingContext
    */
+  @SuppressWarnings("override")
   public void handleGetEntity(final RoutingContext routingContext) {
     final var entityIri = routingContext.request().absoluteURI();
     this.rdfStoreMessagebox

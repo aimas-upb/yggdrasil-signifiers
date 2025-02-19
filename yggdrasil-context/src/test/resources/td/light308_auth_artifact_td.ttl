@@ -1,0 +1,77 @@
+@prefix td: <https://www.w3.org/2019/wot/td#> .
+@prefix htv: <http://www.w3.org/2011/http#> .
+@prefix hctl: <https://www.w3.org/2019/wot/hypermedia#> .
+@prefix dct: <http://purl.org/dc/terms/> .
+@prefix wotsec: <https://www.w3.org/2019/wot/security#> .
+@prefix js: <https://www.w3.org/2019/wot/json-schema#> .
+@prefix acl: <http://www.w3.org/ns/auth/acl#> .
+@prefix hmas: <https://purl.org/hmas/> .
+@prefix cashmere: <https://aimas.cs.pub.ro/ont/cashmere#> .
+@prefix ex: <http://example.org/> .
+
+
+<http://localhost:8080/workspaces/lab308/artifacts/light308/#artifact> a td:Thing, cashmere:ContextAuthorizedResource, hmas:Artifact, ex:HueLamp ;
+    td:title "Hue Lamp with Context-Based Authorization" ;
+    td:hasSecurityConfiguration [ a wotsec:NoSecurityScheme ] ;
+    td:hasPropertyAffordance [
+        a td:PropertyAffordance, ex:StatusProperty ;
+        td:name "status" ;
+        td:hasForm [
+            htv:methodName "GET" ;
+            hctl:hasTarget <http://localhost:8080/workspaces/lab308/artifacts/light308/status> ; # status property affordance URI
+            hctl:forContentType "application/json";
+            hctl:hasOperationType td:readMultipleProperties ;
+        ] ;
+        td:hasOutputSchema [
+            a js:ObjectSchema ;
+            js:properties [
+                a js:StringSchema ;
+                js:propertyName "state";
+                js:oneOf ([js:const "on"]  [js:const "off"]);
+            ] ;
+            js:properties [
+                a js:StringSchema ;
+                js:propertyName "color";
+                js:oneOf ([js:const "red"]  [js:const "green"]  [js:const "blue"]);
+            ] ;
+            js:required ("state" "color") ;
+            js:additionalProperties false .
+        ] ;
+    ] ;
+    td:hasActionAffordance [
+        a td:ActionAffordance, ex:ToggleCommand ;
+        td:name "toggle" ;
+        td:hasForm [
+            htv:methodName "POST" ;
+            hctl:hasTarget <http://localhost:8080/workspaces/lab308/artifacts/light308/toggle> ;    # toggle action affordance URI
+            hctl:forContentType "application/json";
+            hctl:hasOperationType td:invokeAction;
+        ] ;
+    ] ;
+    td:hasActionAffordance [
+        a td:ActionAffordance, ex:ColorCommand ;
+        td:name "color" ;
+        td:hasForm [
+            htv:methodName "POST" ;
+            hctl:hasTarget <http://localhost:8080/workspaces/lab308/artifacts/light308/color> ;     # color action affordance URI
+            hctl:forContentType "application/json";
+            hctl:hasOperationType td:invokeAction;
+        ] ;
+        td:hasInputSchema [
+            a js:ObjectSchema ;
+            js:properties [
+                a js:StringSchema ;
+                js:propertyName "color";
+                js:oneOf ([js:const "red"]  [js:const "green"]  [js:const "blue"]);
+            ] ;
+            js:required "color" ;
+        ] ;
+    ] ;
+    # Shared Context Authorization
+    cashmere:hasAccessAuthorization [
+        a cashmere:ContextBasedAuthorization ;
+        acl:accessTo <http://localhost:8080/workspaces/lab308/artifacts/light308/#artifact> ;
+        acl:mode acl:Read, acl:Write ;
+        cashmere:hasAccessCondition ex:light308AccessCondition ;
+    ] .
+    

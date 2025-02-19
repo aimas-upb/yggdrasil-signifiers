@@ -1,0 +1,205 @@
+@prefix : <http://example.org/> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix xml: <http://www.w3.org/XML/1998/namespace> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix consert-ann: <http://pervasive.semanticweb.org/ont/2017/07/consert/annotation#> .
+@prefix consert-core: <http://pervasive.semanticweb.org/ont/2017/07/consert/core#> .
+@prefix ex: <http://example.org/> .
+
+<http://example.org/upb_hmas> rdf:type owl:Ontology ;
+                                                    owl:imports <http://pervasive.semanticweb.org/ont/2017/07/consert/annotation> ,
+                                                                <http://pervasive.semanticweb.org/ont/2017/07/consert/core> ;
+                                                    rdfs:comment "Ontology file containing instances of ContextEntities and ContextAssertions in the context-aware access to smart devices scenario. The scenario proposes using RSP to enable context-aware web access control."@en ;
+                                                    rdfs:label "RSP Demo Lab 308"@en ;
+                                                    owl:versionInfo "1.0.0" .
+
+#################################################################
+#    Classes
+#################################################################
+
+###  http://example.org/AvailabilityStatus
+ex:AvailabilityStatus rdf:type owl:Class ;
+                    rdfs:subClassOf consert-core:ContextEntity .
+
+
+###  http://example.org/Device
+ex:Device rdf:type owl:Class ;
+        rdfs:subClassOf consert-core:ContextEntity .
+
+ex:HueLamp rdf:type owl:Class ;
+        rdfs:subClassOf ex:Device .
+
+
+###  http://example.org/HasAvailabilityStatus
+ex:HasAvailabilityStatus rdf:type owl:Class ;
+                       rdfs:subClassOf consert-core:BinaryContextAssertion ,
+                                       [ rdf:type owl:Restriction ;
+                                         owl:onProperty consert-core:assertionObject ;
+                                         owl:allValuesFrom ex:AvailabilityStatus
+                                       ] ,
+                                       [ rdf:type owl:Restriction ;
+                                         owl:onProperty consert-core:assertionSubject ;
+                                         owl:allValuesFrom ex:Device
+                                       ] ,
+                                       [ rdf:type owl:Restriction ;
+                                         owl:onProperty consert-core:assertionAcquisitionType ;
+                                         owl:hasValue consert-core:Sensed
+                                       ] .
+
+
+###  http://example.org/LocatedAt
+ex:LocatedAt rdf:type owl:Class ;
+           rdfs:subClassOf consert-core:BinaryContextAssertion ,
+                           [ rdf:type owl:Restriction ;
+                             owl:onProperty consert-core:assertionAcquisitionType ;
+                             owl:allValuesFrom [ rdf:type owl:Class ;
+                                                 owl:oneOf ( consert-core:Profiled
+                                                             consert-core:Sensed
+                                                           )
+                                               ]
+                           ] ,
+                           [ rdf:type owl:Restriction ;
+                             owl:onProperty consert-core:assertionObject ;
+                             owl:allValuesFrom ex:Room
+                           ] ,
+                           [ rdf:type owl:Restriction ;
+                             owl:onProperty consert-core:assertionSubject ;
+                             owl:allValuesFrom [ rdf:type owl:Class ;
+                                                 owl:unionOf ( ex:Device
+                                                               ex:Person
+                                                             )
+                                               ]
+                           ] .
+
+
+###  http://example.org/Organization
+ex:Organization rdf:type owl:Class ;
+              rdfs:subClassOf consert-core:ContextEntity .
+
+
+###  http://example.org/OwnedBy
+ex:OwnedBy rdf:type owl:Class ;
+         rdfs:subClassOf consert-core:BinaryContextAssertion ,
+                         [ rdf:type owl:Restriction ;
+                           owl:onProperty consert-core:assertionObject ;
+                           owl:allValuesFrom ex:Organization
+                         ] ,
+                         [ rdf:type owl:Restriction ;
+                           owl:onProperty consert-core:assertionSubject ;
+                           owl:allValuesFrom [ rdf:type owl:Class ;
+                                               owl:unionOf ( ex:Device
+                                                             ex:Room
+                                                           )
+                                             ]
+                         ] ,
+                         [ rdf:type owl:Restriction ;
+                           owl:onProperty consert-core:assertionAcquisitionType ;
+                           owl:hasValue consert-core:Profiled
+                         ] .
+
+
+###  http://example.org/Person
+ex:Agent rdf:type owl:Class ;
+        rdfs:subClassOf consert-core:ContextEntity ;
+        rdfs:subClassOf foaf:Agent .
+
+
+###  http://example.org/Room
+ex:Room rdf:type owl:Class ;
+      rdfs:subClassOf consert-core:ContextEntity .
+
+
+###  http://example.org/WorksAt
+ex:WorksAt rdf:type owl:Class ;
+         rdfs:subClassOf consert-core:BinaryContextAssertion ,
+                         [ rdf:type owl:Restriction ;
+                           owl:onProperty consert-core:assertionObject ;
+                           owl:allValuesFrom ex:Organization
+                         ] ,
+                         [ rdf:type owl:Restriction ;
+                           owl:onProperty consert-core:assertionSubject ;
+                           owl:allValuesFrom ex:Person
+                         ] ,
+                         [ rdf:type owl:Restriction ;
+                           owl:onProperty consert-core:assertionAcquisitionType ;
+                           owl:hasValue consert-core:Profiled
+                         ] .
+
+
+#################################################################
+#    Individuals
+#################################################################
+
+###  http://example.org/alexAgent
+ex:alexAgent rdf:type owl:NamedIndividual ,
+               ex:Agent .
+
+
+###  http://example.org/alexWorkPlace
+ex:alexWorkPlace rdf:type owl:NamedIndividual ,
+                        ex:WorksAt ;
+               consert-ann:hasAnnotation ex:alexWorkTemporalAnn ;
+               consert-core:assertionObject ex:upb ;
+               consert-core:assertionSubject ex:alexAgent .
+
+
+###  http://example.org/alexWorkTemporalAnn
+ex:alexWorkTemporalAnn rdf:type owl:NamedIndividual ,
+                              consert-ann:TemporalValidityAnnotation ;
+                     consert-ann:startTime "2020-02-01 12:00:00"^^xsd:dateTime ;
+                     consert-ann:endTime   "2051-07-25 23:59:59"^^xsd:dateTime .
+
+
+###  http://example.org/available
+ex:available rdf:type owl:NamedIndividual ,
+                    ex:AvailabilityStatus .
+
+
+###  http://example.org/blinds308
+ex:blinds308 rdf:type owl:NamedIndividual ,
+                       ex:Device .
+
+
+###  http://example.org/light308
+ex:light308 rdf:type owl:NamedIndividual ,
+                        ex:Device .
+
+
+###  http://example.org/lab308
+ex:lab308 rdf:type owl:NamedIndividual ,
+                 ex:Room .
+
+
+###  http://example.org/lab308ownership
+ex:lab308ownership rdf:type owl:NamedIndividual ,
+                          ex:OwnedBy ;
+                 consert-core:assertionObject ex:upb ;
+                 consert-core:assertionSubject ex:lab308 .
+
+
+###  http://example.org/notAvailable
+ex:notAvailable rdf:type owl:NamedIndividual ,
+                       ex:AvailabilityStatus .
+
+
+###  http://example.org/upb
+ex:upb rdf:type owl:NamedIndividual ,
+              ex:Organization .
+
+
+#################################################################
+#    General axioms
+#################################################################
+
+[ rdf:type owl:AllDisjointClasses ;
+  owl:members ( ex:AvailabilityStatus
+                ex:Device
+                ex:Organization
+                ex:Person
+                ex:Room
+              )
+] .
+

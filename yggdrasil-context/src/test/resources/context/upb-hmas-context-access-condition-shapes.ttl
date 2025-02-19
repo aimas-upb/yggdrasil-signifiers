@@ -1,0 +1,93 @@
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix consert: <http://pervasive.semanticweb.org/ont/2017/07/consert/core#> .
+@prefix ann: <http://pervasive.semanticweb.org/ont/2017/07/consert/annotation#> .
+
+@prefix acl: <http://www.w3.org/ns/auth/acl#> .
+@prefix hmas: <https://purl.org/hmas/> .
+@prefix cashmere: <https://aimas.cs.pub.ro/ont/cashmere#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+
+@prefix ex: <http://example.org/> .
+
+
+# cashmere:ContextBasedAccessCondition rdfs:subClassOf sh:NodeShape .
+cashmere:ProfiledContextCondition rdfs:subClassOf sh:NodeShape .
+cashmere:ContextDomainCondition rdfs:subClassOf sh:NodeShape .
+
+# The access condition for the light308 resource
+ex:light308AccessCondition 
+    a cashmere:ContextBasedAccessCondition ;
+    cashmere:targetEntity cashmere:accessRequester ;
+    cashmere:containsConditions (
+        ex:UPBEmploymentCondition
+        ex:Lab308MembershipCondition
+    ) .
+
+# The access condition based on the profiled information of the accessRequester - the employment condition
+ex:UPBEmploymentCondition
+    a cashmere:ProfiledContextCondition, sh:NodeShape ;
+    sh:targetClass ex:WorksAt ;
+    sh:property [
+        sh:path consert:assertionSubject ;
+        sh:hasValue cashmere:accessRequester ;
+    ] ;
+    sh:property [
+        sh:path consert:assertionObject ;
+        sh:hasValue ex:upb ;
+    ] ;
+    sh:property [
+        sh:path ann:hasAnnotation ;
+        sh:class ann:TemporalValidityAnnotation ;
+        sh:node [
+              a sh:NodeShape ;
+              sh:and (
+                [
+                  a sh:PropertyShape ;
+                  sh:path ann:startTime ;
+                  sh:maxCount 1 ;
+                  sh:datatype xsd:dateTime ;
+                  sh:sparql [
+                      a sh:SPARQLConstraint ;
+                      sh:message "The employment validity {$this} of the accessRequester has to start before the current moment." ;
+                      sh:select """
+                        SELECT $this ?value
+                        WHERE {
+                          $this $PATH ?value .
+                          BIND (xsd:dateTime(NOW()) AS ?now)
+                          FILTER (?now < ?value)
+                        }
+                      """ ;
+                  ] ;
+                ]
+                [
+                  a sh:PropertyShape ;
+                  sh:path ann:endTime ;
+                  sh:maxCount 1 ;
+                  sh:datatype xsd:dateTime ;
+                  sh:sparql [
+                      a sh:SPARQLConstraint ;
+                      sh:message "The employment validity {$this} of the accessRequester has to end after the current moment." ;
+                      sh:select """
+                        SELECT $this ?value
+                        WHERE {
+                          $this $PATH ?value .
+                          BIND (xsd:dateTime(NOW()) AS ?now)
+                          FILTER (?now > ?value)
+                        }
+                      """ ;
+                  ] ;
+                ]
+              ) ;
+        ] ;
+    ] .
+
+
+ex:Lab308MembershipCondition
+    a cashmere:ContextDomainCondition, sh:NodeShape ;
+    sh:targetNode cashmere:accessRequester ;
+    sh:property [
+        sh:path cashmere:memberIn ;
+        sh:hasValue <http://example.org/environments/upb_hmas/ctxmgmt/domains/lab308Domain/group> ;
+    ] .

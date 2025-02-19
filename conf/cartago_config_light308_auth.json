@@ -1,0 +1,79 @@
+{
+  "http-config" : {
+    "host" : "localhost",
+    "port" : 8080,
+    "base-uri" : "http://localhost:8080/"
+  },
+  "notification-config" : {
+    "enabled" : true
+  },
+  "agents" : [
+    {
+      "name" : "alex_agent",
+      "agent-uri" : "http://localhost:8080/agents/alex",
+      "callback-uri" : "http://localhost:8081/"
+    }
+  ],
+  "environment-config" : {
+    "known-artifacts" : [
+      {
+        "class" : "http://example.org/HueLamp",
+        "template" : "org.hyperagents.yggdrasil.cartago.artifacts.HueLampTD"
+      }
+    ],
+    "workspaces" : [
+      {
+        "name" : "lab308",
+        "parent-name" : "precis",
+        "artifacts" : [
+          {
+            "name" : "light308",
+            "class" : "http://example.org/HueLamp",
+            "init-params" : [
+              "off",
+              "blue"
+            ],
+            "focused-by" : ["alex_agent"]
+          }
+        ],
+        "joined-by" : ["alex_agent"]
+      },
+      {
+        "name" : "precis"
+      }
+    ],
+    "enabled" : true,
+    "ontology" : "td"
+  },
+  "context-management-config" : {
+    "enabled" : true,
+    "static-context": "file:///home/alex/OneDrive/AI-MAS/projects/2022-CASHMERE/dev/yggdrasil/yggdrasil-context/src/test/resources/context/upb-hmas-static-context.ttl",
+    "profiled-context": "file:///home/alex/OneDrive/AI-MAS/projects/2022-CASHMERE/dev/yggdrasil/yggdrasil-context/src/test/resources/context/upb-hmas-profiled-context.ttl",
+    
+    "context-streams": [
+      {
+        "stream_url": "http://localhost:8080/context/streams/LocatedAt",
+        "ontology_url": "file:///home/alex/OneDrive/AI-MAS/projects/2022-CASHMERE/dev/yggdrasil/yggdrasil-context/src/test/resources/context/upb-hmas-ont.ttl",
+        "generator_class": "org.hyperagents.yggdrasil.context.LocatedAtContextStream",
+        
+        "single_assertion": true,
+        "assertions": [
+          "http://example.org/LocatedAt"
+        ]
+      }
+    ],
+    
+    "context-domains": [
+      {
+        "domain_uri": "http://localhost:8080/context/domains/lab308Domain",
+        "streams": [
+          "http://localhost:8080/context/streams/LocatedAt"
+        ],
+        "membership_rules": [
+          "file:///home/alex/OneDrive/AI-MAS/projects/2022-CASHMERE/dev/yggdrasil/yggdrasil-context/src/test/resources/context/lab308membership.rspql"
+        ],
+        "engine_config_url": "file:///home/alex/OneDrive/AI-MAS/projects/2022-CASHMERE/dev/yggdrasil/yggdrasil-context/src/test/resources/context/lab308membership-csparql-engine-config.properties"
+      }
+    ]
+  }
+}

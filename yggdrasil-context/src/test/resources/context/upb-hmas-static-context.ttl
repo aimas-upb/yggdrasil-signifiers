@@ -1,0 +1,8 @@
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix consert: <http://pervasive.semanticweb.org/ont/2017/07/consert/core/> .
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix ex: <http://example.org/> .
+
+ex:alexAgent a consert:ContextEntity, foaf:Agent .
+ex:upb a consert:ContextEntity, ex:Organization .

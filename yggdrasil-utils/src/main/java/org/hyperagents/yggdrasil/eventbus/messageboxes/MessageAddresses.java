@@ -6,7 +6,8 @@ package org.hyperagents.yggdrasil.eventbus.messageboxes;
 enum MessageAddresses {
   RDF_STORE("rdfstore"),
   CARTAGO("cartago"),
-  HTTP_NOTIFICATION_DISPATCHER("dispatcher");
+  HTTP_NOTIFICATION_DISPATCHER("dispatcher"),
+  CONTEXT_SERVICE("contextService"),;
 
   private static final String PREFIX = "org.hyperagents.yggdrasil.eventbus.";
 

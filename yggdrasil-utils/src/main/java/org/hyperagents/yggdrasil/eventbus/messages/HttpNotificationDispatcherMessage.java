@@ -140,4 +140,17 @@ public sealed interface HttpNotificationDispatcherMessage {
    */
   record RemoveCallback(String requestIri, String callbackIri)
       implements HttpNotificationDispatcherMessage {}
+
+  /**
+   * A record representing a message that a context stream has been updated.
+   * 
+   * <p>This record is used when a context stream has been updated
+   * and a message needs to be sent to the HTTP Notification Dispatcher.
+   * The requestIri is the IRI of the context stream that has been updated.
+   * The content is a string representation of a Turtle payload of the RDF graph constituing the stream update.
+   * @param requestIri The IRI of the context stream that has been updated.
+   * @param content The string representation of the Turtle payload of the RDF graph constituing the stream update.
+   */
+  record UpdateStream(String requestIri, String content)
+      implements HttpNotificationDispatcherMessage {}
 }

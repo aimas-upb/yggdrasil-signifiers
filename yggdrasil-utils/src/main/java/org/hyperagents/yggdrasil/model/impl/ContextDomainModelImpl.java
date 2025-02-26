@@ -5,21 +5,21 @@ import java.util.List;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.hyperagents.yggdrasil.model.interfaces.ContextDomain;
+import org.hyperagents.yggdrasil.model.interfaces.ContextDomainModel;
 import org.hyperagents.yggdrasil.utils.JsonObjectUtils;
 
 import io.vertx.core.json.JsonObject;
 
 
-public final class ContextDomainImpl implements ContextDomain {
-    private static final Logger LOGGER = LogManager.getLogger(ContextDomainImpl.class);
+public final class ContextDomainModelImpl implements ContextDomainModel {
+    private static final Logger LOGGER = LogManager.getLogger(ContextDomainModelImpl.class);
     
     private final String domainUri;
     private final List<String> streams;
     private final List<String> membershipRules;
     private final String engineConfigUrl;
 
-    public ContextDomainImpl(JsonObject contextDomainConfig) {
+    public ContextDomainModelImpl(JsonObject contextDomainConfig) {
         this.domainUri = JsonObjectUtils.getString(contextDomainConfig, "domain_uri", LOGGER::error).orElse(null);
 
         this.streams = JsonObjectUtils.getJsonArray(contextDomainConfig, "streams", LOGGER::error)

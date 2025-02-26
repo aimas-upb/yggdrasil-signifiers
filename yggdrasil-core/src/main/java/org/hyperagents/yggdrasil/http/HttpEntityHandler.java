@@ -398,7 +398,6 @@ public class HttpEntityHandler implements HttpEntityHandlerInterface {
     final var entityIri = subscribeRequest.getString("hub.topic");
     final var callbackIri = subscribeRequest.getString("hub.callback");
 
-
     switch (subscribeRequest.getString("hub.mode").toLowerCase(Locale.ENGLISH)) {
       case "subscribe":
         if (entityIri.matches("^https?://.*?:[0-9]+/workspaces(/)?(\\?(parent=[^&]+))?$")) {
@@ -443,6 +442,79 @@ public class HttpEntityHandler implements HttpEntityHandlerInterface {
         break;
     }
   }
+
+  /**
+   * Handles WebSub subscription/unsuscription and push requests.
+   *
+   * @param routingContext routingContext
+   */
+  public void handleWebSub(final RoutingContext routingContext) {
+    final var requestBody = routingContext.body().asJsonObject();
+    final var mode = requestBody.getString("hub.mode").toLowerCase(Locale.ENGLISH);
+
+    switch (mode) {
+        case "subscribe": {
+            final var entityIri = requestBody.getString("hub.topic");
+            final var callbackIri = requestBody.getString("hub.callback");
+            
+            if (entityIri.matches("^https?://.*?:[0-9]+/workspaces(/)?(\\?(parent=[^&]+))?$")) {
+                this.notificationMessagebox
+                    .sendMessage(
+                        new HttpNotificationDispatcherMessage.AddCallback(entityIri, callbackIri)
+                    )
+                    .onSuccess(r -> routingContext.response().setStatusCode(HttpStatus.SC_OK).end())
+                    .onFailure(t -> routingContext.fail(HttpStatus.SC_INTERNAL_SERVER_ERROR));
+            } else {
+                final var actualEntityIri =
+                    Pattern.compile("^(https?://.*?:[0-9]+/workspaces/.*?)/(?:artifacts|agents)/$")
+                        .matcher(entityIri)
+                        .results()
+                        .map(r -> r.group(1))
+                        .findFirst()
+                        .orElse(entityIri);
+                
+                this.rdfStoreMessagebox
+                    .sendMessage(new RdfStoreMessage.GetEntity(actualEntityIri))
+                    .compose(r -> this.notificationMessagebox.sendMessage(
+                        new HttpNotificationDispatcherMessage.AddCallback(entityIri, callbackIri)
+                    ))
+                    .onSuccess(r -> routingContext.response().setStatusCode(HttpStatus.SC_OK).end())
+                    .onFailure(t -> routingContext.fail(
+                        t instanceof ReplyException e && e.failureCode() == HttpStatus.SC_NOT_FOUND
+                            ? HttpStatus.SC_NOT_FOUND
+                            : HttpStatus.SC_INTERNAL_SERVER_ERROR
+                    ));
+            }
+            break;
+        }
+        case "unsubscribe": {
+            final var entityIri = requestBody.getString("hub.topic");
+            final var callbackIri = requestBody.getString("hub.callback");
+            
+            this.notificationMessagebox
+                .sendMessage(
+                    new HttpNotificationDispatcherMessage.RemoveCallback(entityIri, callbackIri)
+                )
+                .onSuccess(r -> routingContext.response().setStatusCode(HttpStatus.SC_OK).end())
+                .onFailure(t -> routingContext.fail(HttpStatus.SC_INTERNAL_SERVER_ERROR));
+            break;
+        }
+        case "update_stream": {
+            final var url = requestBody.getString("hub.url");
+            final var payload = requestBody.getString("hub.payload");
+            
+            this.notificationMessagebox
+                .sendMessage(new HttpNotificationDispatcherMessage.UpdateStream(url, payload))
+                .onSuccess(r -> routingContext.response().setStatusCode(HttpStatus.SC_OK).end())
+                .onFailure(t -> routingContext.fail(HttpStatus.SC_INTERNAL_SERVER_ERROR));
+            break;
+        }
+        default:
+            routingContext.response().setStatusCode(HttpStatus.SC_BAD_REQUEST).end();
+            break;
+    }
+}
+
 
   /**
    * handles joining a workspace.

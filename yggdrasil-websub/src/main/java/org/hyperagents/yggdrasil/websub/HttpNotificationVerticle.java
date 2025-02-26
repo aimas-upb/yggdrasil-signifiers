@@ -1,6 +1,18 @@
 package org.hyperagents.yggdrasil.websub;
 
+import java.util.regex.Pattern;
+
+import org.apache.hc.core5.http.HttpStatus;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.hyperagents.yggdrasil.eventbus.messageboxes.HttpNotificationDispatcherMessagebox;
+import org.hyperagents.yggdrasil.eventbus.messages.HttpNotificationDispatcherMessage;
+import org.hyperagents.yggdrasil.model.interfaces.Environment;
+import org.hyperagents.yggdrasil.utils.HttpInterfaceConfig;
+import org.hyperagents.yggdrasil.utils.WebSubConfig;
+
 import com.google.common.net.HttpHeaders;
+
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.AsyncResult;
 import io.vertx.core.Handler;
@@ -10,15 +22,6 @@ import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.client.HttpRequest;
 import io.vertx.ext.web.client.HttpResponse;
 import io.vertx.ext.web.client.WebClient;
-import java.util.regex.Pattern;
-import org.apache.hc.core5.http.HttpStatus;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-import org.hyperagents.yggdrasil.eventbus.messageboxes.HttpNotificationDispatcherMessagebox;
-import org.hyperagents.yggdrasil.eventbus.messages.HttpNotificationDispatcherMessage;
-import org.hyperagents.yggdrasil.model.interfaces.Environment;
-import org.hyperagents.yggdrasil.utils.HttpInterfaceConfig;
-import org.hyperagents.yggdrasil.utils.WebSubConfig;
 
 /**
  * Utility Verticle to implement Websub functionality.
@@ -124,6 +127,9 @@ public class HttpNotificationVerticle extends AbstractVerticle {
             content,
             "actionSucceeded"
           );
+        case HttpNotificationDispatcherMessage.UpdateStream(String requestIri, String content) ->
+          // this is the case of updating a context stream that is registered with the Context Management Service
+          this.handleNotificationSending(client, webSubHubUri, requestIri, content, "text/turtle");
       }
     });
   }

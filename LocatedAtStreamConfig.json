@@ -1,0 +1,8 @@
+{
+    "assertionType": "http://example.org/LocatedAt",
+    "assertionSubject": "http://localhost:8080/agents/alex",
+    "assertionObject": "http://example.org/lab308",
+    "streamURI": "http://localhost:8080/context/streams/LocatedAt",
+    "generateEvery": 5,
+    "hubURI": "http://localhost:8080/context/hub"
+}

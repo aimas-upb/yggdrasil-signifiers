@@ -10,6 +10,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import org.apache.http.HttpResponse;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.entity.StringEntity;
+import org.apache.http.impl.client.HttpClients;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.eclipse.rdf4j.common.exception.ValidationException;
@@ -28,25 +33,26 @@ import org.eclipse.rdf4j.sail.memory.MemoryStore;
 import org.eclipse.rdf4j.sail.shacl.ShaclSail;
 import org.hyperagents.yggdrasil.auth.model.CASHMERE;
 import org.hyperagents.yggdrasil.context.ContextDomain;
+import org.hyperagents.yggdrasil.context.ContextStream;
+import org.hyperagents.yggdrasil.eventbus.messageboxes.ContextMessageBox;
+import org.hyperagents.yggdrasil.model.interfaces.ContextDomainModel;
+import org.hyperagents.yggdrasil.model.interfaces.ContextStreamModel;
+import org.hyperagents.yggdrasil.utils.ContextManagementConfig;
+import org.hyperagents.yggdrasil.utils.HttpInterfaceConfig;
+import org.hyperagents.yggdrasil.utils.WebSubConfig;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import io.vertx.core.AbstractVerticle;
-import io.vertx.core.eventbus.EventBus;
 import io.vertx.core.eventbus.Message;
 import io.vertx.core.json.JsonObject;
 
 public class ContextMgmtVerticle extends AbstractVerticle {
-    public static final String BUS_ADDRESS = "org.hyperagents.yggdrasil.eventbus.context";
-    
-    // Context services
-    public static final String VALIDATE_CONTEXT_BASED_ACCESS = "org.hyperagents.yggdrasil.eventbus.headers.services" + ".validateContextBasedAccess";
-    
-    // keys for the headers of the event bus messages
-    public static final String ACCESS_REQUESTER_URI = "org.hyperagents.yggdrasil.eventbus.headers.accessRequesterURI";
-    public static final String ACCESSED_RESOURCE_URI = "org.hyperagents.yggdrasil.eventbus.headers.accessedResourceURI";
-    public static final String CONTEXT_SERVICE = "org.hyperagents.yggdrasil.eventbus.headers.contextService";
-
     // Logger
     private static final Logger LOGGER = LogManager.getLogger(ContextMgmtVerticle.class);
+
+    // the configuration object for the context management service
+    private ContextManagementConfig contextManagementConfig;
 
     // The URI of the context management service
     private String serviceURI;
@@ -56,6 +62,10 @@ public class ContextMgmtVerticle extends AbstractVerticle {
 
     // The RDF store for the profiled context information
     private SailRepository profiledContextRepo;
+
+    // The list of ContextStream objects that represent the dynamic context information streams
+    private final Map<String, ContextStream> contextStreamMap = new HashMap<>();
+    private final ObjectMapper mapper = new ObjectMapper();
 
     // A Map linking the URI of the ContextDomain to the ContextDomain object
     private Map<String, ContextDomain> contextDomains;
@@ -70,109 +80,161 @@ public class ContextMgmtVerticle extends AbstractVerticle {
 
     @Override
     public void start() {
-        //register the event bus handlers
-        EventBus eventBus = vertx.eventBus();
-        eventBus.consumer(BUS_ADDRESS, this::handleContextRequest);
+        // retrieve the configuration object for the context management service
+        this.contextManagementConfig = this.vertx.sharedData()
+            .<String, ContextManagementConfig>getLocalMap("context-management-config")
+            .get("default");
+
+        final var httpConfig = this.vertx.sharedData()
+            .<String, HttpInterfaceConfig>getLocalMap("http-config")
+            .get("default");
+        final var notificationConfig = this.vertx.sharedData()
+            .<String, WebSubConfig>getLocalMap("notification-config")
+            .get("default");
+
+        //create message box for operations handling
+        final var ContextMessageBox = new ContextMessageBox(this.vertx.eventBus(), this.contextManagementConfig);
 
         // initialize the map of context domains, the map of dynamic context assertions and the map of artifact policies
         contextDomains = new HashMap<>();
         dynamicContextAssertions = new HashMap<>();
         artifactPolicies = new HashMap<>();
         
-        JsonObject ctxMgmtServiceConfig = config();
-
         // get the service URI from the configuration
-        this.serviceURI = ctxMgmtServiceConfig.getString("service-uri");
+        this.serviceURI = contextManagementConfig.getServiceURI();
 
-        setupStaticContextRepo(config());
-        setupProfiledContextRepo(config());
-        setupCDGMembershipRepo(config());
-        setupAssertionStreams(config());
+        setupStaticContextRepo(contextManagementConfig);
+        setupProfiledContextRepo(contextManagementConfig);
+        setupCDGMembershipRepo(contextManagementConfig);
+        
+
+        // Set up the Context Stream monitoring by subscribing to the WebSub notifications for ContextStream updates
+        initializeContextStreams(contextManagementConfig, httpConfig, notificationConfig);
 
         // Set up the context access conditions repository
-        setupContextAccessConditionsRepo(config());
+        setupContextAccessConditionsRepo(contextManagementConfig);
     }
 
-    private void setupStaticContextRepo(JsonObject config) {
+    private void setupStaticContextRepo(ContextManagementConfig config) {
         // First, set up the static context repository. We set it up as a SailRepository over an in-memory store.
         staticContextRepo = new SailRepository(new MemoryStore());
         
         try {
-            URL staticContextURL = URI.create(config.getString("static-context")).toURL();
+            if (config.getStaticContextGraphURI() == null) {
+                LOGGER.warn("No source of default static context information provided in the configuration.");
+                return;
+            }
             
+            URL staticContextURL = URI.create(config.getStaticContextGraphURI()).toURL();
+
             // open the URL stream and load the contents of the RDF file (in turtle format) into the static context repository
             staticContextRepo.getConnection().add(staticContextURL, "http://example.org/", RDFFormat.TURTLE);
 
         } catch (MalformedURLException e) {
-            LOGGER.error("Malformed URL for source of default static context information: " + config.getString("static-context") + ". Reason: " + e.getMessage());
+            LOGGER.error("Malformed URL for source of default static context information: " + config.getStaticContextGraphURI() + ". Reason: " + e.getMessage());
         } catch (RDFParseException e) {
-            LOGGER.error("Error parsing the RDF content of the default static context information: " + config.getString("static-context") + ". Reason: " + e.getMessage());
+            LOGGER.error("Error parsing the RDF content of the default static context information: " + config.getStaticContextGraphURI() + ". Reason: " + e.getMessage());
         } catch (RepositoryException e) {
             LOGGER.error("Error adding the RDF content of the default static context information to the static repository: " + ". Reason: " + e.getMessage());
         } catch (IOException e) {
-            LOGGER.error("Error reading the RDF content of the default static context information from the source: " + config.getString("static-context") + ". Reason: " + e.getMessage());
+            LOGGER.error("Error reading the RDF content of the default static context information from the source: " + config.getStaticContextGraphURI() + ". Reason: " + e.getMessage());
         } 
     }
 
-    private void setupProfiledContextRepo(JsonObject config) {
+    private void setupProfiledContextRepo(ContextManagementConfig config) {
         // Set up the profiled context repository. We set it up as a SailRepository over an in-memory store.
         profiledContextRepo = new SailRepository(new MemoryStore());
         
         try {
-            URL profiledContextURL = URI.create(config.getString("profiled-context")).toURL();
+            if (config.getProfiledContextGraphURI() == null) {
+                LOGGER.warn("No source of profiled context information provided in the configuration.");
+                return;
+            }
+            
+            URL profiledContextURL = URI.create(config.getProfiledContextGraphURI()).toURL();
             
             // Open the URL stream and load the contents of the RDF file (in turtle format) into the profiled context repository
             profiledContextRepo.getConnection().add(profiledContextURL, "http://example.org/", RDFFormat.TURTLE);
 
         } catch (MalformedURLException e) {
-            LOGGER.error("Malformed URL for source of profiled context information: " + config.getString("profiled-context") + ". Reason: " + e.getMessage());
+            LOGGER.error("Malformed URL for source of profiled context information: " + config.getProfiledContextGraphURI() + ". Reason: " + e.getMessage());
         } catch (RDFParseException e) {
-            LOGGER.error("Error parsing the RDF content of the profiled context information: " + config.getString("profiled-context") + ". Reason: " + e.getMessage());
+            LOGGER.error("Error parsing the RDF content of the profiled context information: " + config.getProfiledContextGraphURI() + ". Reason: " + e.getMessage());
         } catch (RepositoryException e) {
             LOGGER.error("Error adding the RDF content of the profiled context information to the profiled repository: " + ". Reason: " + e.getMessage());
         } catch (IOException e) {
-            LOGGER.error("Error reading the RDF content of the profiled context information from the source: " + config.getString("profiled-context") + ". Reason: " + e.getMessage());
+            LOGGER.error("Error reading the RDF content of the profiled context information from the source: " + config.getProfiledContextGraphURI() + ". Reason: " + e.getMessage());
         } 
     }
 
-    private void setupCDGMembershipRepo(JsonObject config) {
+    private void setupCDGMembershipRepo(ContextManagementConfig config) {
         // Set up the ContextDomains. 
-        // The first level of keys in the context-domains JSON object are the URIs of the ContextDomains.
-        // Iterate over the keys and set up the ContextDomain for each key.
-        for (String contextDomainURI : config.getJsonObject("context-domains").fieldNames()) {
-            JsonObject contextDomainConfig = config.getJsonObject("context-domains").getJsonObject(contextDomainURI);
-            String contextAssertionURI = contextDomainConfig.getString("assertion");
-            String contextEntityURI = contextDomainConfig.getString("entity");
-            String engineConfigURI = contextDomainConfig.getString("engine-config");
+        for (ContextDomainModel contextDomainModel : config.getContextDomains()) {
+            ContextDomain contextDomain = ContextDomain.fromModel(contextDomainModel);
+            contextDomains.put(contextDomainModel.getDomainUri(), contextDomain);
+        }
+    }
 
-            // if a stream URI is provided, set it
-            Optional<String> assertionStreamURI = Optional.ofNullable(contextDomainConfig.getString("stream")); 
-            String ruleURI = contextDomainConfig.getString("rule");
+    private void setupContextDomainFromModel(ContextDomainModel contextDomainModel) {
+        // TODO: Implement this method
+        // contextDomains.put(contextDomainURI, contextDomain);
+    }
 
-            // if a local stream generator class is provided, set it
-            Optional<String> streamGeneratorClass = Optional.ofNullable(contextDomainConfig.getString("generatorClass"));
+    // ============================================================================
+    // =================== Methods for context stream monitoring ==================
+    // ============================================================================
+    /**
+     * Initializes all context streams from the configuration and subscribes them to the WebSub hub.
+     */
+    private void initializeContextStreams(ContextManagementConfig contextManagementConfig, HttpInterfaceConfig httpConfig, WebSubConfig webSubConfig) {
+        List<ContextStreamModel> streamConfigs = contextManagementConfig.getContextStreams();
+        
+        for (var streamInfo : streamConfigs) {
+            // Create a new ContextStream for each stream URI
+            String streamURI = streamInfo.getStreamUri();
+            ContextStream stream = new ContextStream(streamURI, streamInfo.getOntologyUrl(), streamInfo.getAssertions());
+            contextStreamMap.put(streamURI, stream);
             
-
-            // create the ContextDomain object and add it to the contextDomains map
-            ContextDomain contextDomain = new ContextDomain(serviceURI, contextAssertionURI, contextEntityURI, 
-                                                            assertionStreamURI, streamGeneratorClass,
-                                                            ruleURI, engineConfigURI);
-            contextDomains.put(contextDomainURI, contextDomain);
+            // Subscribe to the WebSub hub for this stream
+            try {
+                subscribeToHub(httpConfig, webSubConfig, streamURI);
+                LOGGER.info("Subscribed to stream: " + streamInfo + " (name: " + stream.getStreamName() + ")");
+            } catch (IOException e) {
+                LOGGER.error("Failed to subscribe to stream: " + streamInfo, e);
+            }
         }
     }
 
-    private void setupAssertionStreams(JsonObject config) {
-        // Set up the dynamic context assertion streams.
-        // The keys in the dynamic-context-assertions JSON object are the URIs of the dynamic ContextAssertions.
-        // Iterate over the keys and set up the assertion stream for each key.
-        JsonObject dynamicContextAssertionsConfig = config.getJsonObject("dynamic-context");
-        for (String assertionURI : dynamicContextAssertionsConfig.fieldNames()) {
-            String streamURI = dynamicContextAssertionsConfig.getString(assertionURI);
-            dynamicContextAssertions.put(assertionURI, streamURI);
+    /**
+     * Subscribes to the WebSub hub for a specific stream.
+     *
+     * @param streamUri The URI of the stream to subscribe to
+     */
+    private void subscribeToHub(HttpInterfaceConfig httpConfig, WebSubConfig webSubConfig, String streamUri) throws IOException {
+        String hubUri = webSubConfig.getWebSubHubUri();
+        String callbackUri = serviceURI + ContextManagementConfig.STREAM_UPDATES_PATH;
+        
+        HttpClient httpClient = HttpClients.createDefault();
+        HttpPost httpPost = new HttpPost(hubUri);
+        
+        JsonObject json = new JsonObject();
+        json.put("hub.mode", "subscribe");
+        json.put("hub.topic", streamUri);
+        json.put("hub.callback", callbackUri);
+        StringEntity entity = new StringEntity(json.encode());
+        httpPost.setEntity(entity);
+        httpPost.setHeader("Content-Type", "application/json");
+        
+        HttpResponse response = httpClient.execute(httpPost);
+        int statusCode = response.getStatusLine().getStatusCode();
+        
+        if (statusCode < 200 || statusCode >= 300) {
+            throw new IOException("Failed to subscribe to WebSub hub. Status code: " + statusCode);
         }
     }
 
-    private void setupContextAccessConditionsRepo(JsonObject config) {
+
+    private void setupContextAccessConditionsRepo(ContextManagementConfig config) {
         ShaclSail shaclSail = new ShaclSail(new MemoryStore());
         contextAccessConditionsRepo = new SailRepository(shaclSail);
 

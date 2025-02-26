@@ -11,7 +11,7 @@ import org.apache.jena.vocabulary.RDF;
 
 public class LocatedAtContextStream extends LocalContextStream {
   private static final String LOCATED_AT_STREAM_NAME = "<LocatedAt>";
-  private static final String LOCATED_AT_STREAM_URI = "http://example.org/environments/upb_hmas/ctxmgmt/streams/LocatedAt";
+  private static final String LOCATED_AT_STREAM_URI = "http://localhost:8080/context/streams/LocatedAt";
   
   private static final String EXAMPLE_BASE_IRI 		    = "http://example.org/";
   private static final String ANNOTATION_IRI 	        = "http://pervasive.semanticweb.org/ont/2017/07/consert/annotation#";

@@ -1,17 +1,21 @@
 package org.hyperagents.yggdrasil.http;
 
+import org.apache.http.entity.ContentType;
+import org.hyperagents.yggdrasil.context.http.ContextMgmtHandler;
+import org.hyperagents.yggdrasil.utils.ContextManagementConfig;
+import org.hyperagents.yggdrasil.utils.EnvironmentConfig;
+import org.hyperagents.yggdrasil.utils.HttpInterfaceConfig;
+import org.hyperagents.yggdrasil.utils.WebSubConfig;
+
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Promise;
 import io.vertx.core.http.HttpServer;
+import io.vertx.ext.web.Route;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.handler.BodyHandler;
 import io.vertx.ext.web.handler.CorsHandler;
 import io.vertx.ext.web.handler.SessionHandler;
 import io.vertx.ext.web.sstore.LocalSessionStore;
-import org.apache.http.entity.ContentType;
-import org.hyperagents.yggdrasil.utils.EnvironmentConfig;
-import org.hyperagents.yggdrasil.utils.HttpInterfaceConfig;
-import org.hyperagents.yggdrasil.utils.WebSubConfig;
 
 /**
  * This verticle exposes an HTTP/1.1 interface for Yggdrasil. All requests are forwarded to a
@@ -26,6 +30,7 @@ public class HttpServerVerticle extends AbstractVerticle {
   private HttpServer server;
   private EnvironmentConfig environmentConfig;
   private WebSubConfig notificationConfig;
+  private ContextManagementConfig contextManagementConfig;
 
   @Override
   public void start(final Promise<Void> startPromise) {
@@ -39,6 +44,10 @@ public class HttpServerVerticle extends AbstractVerticle {
     this.notificationConfig = this.vertx
         .sharedData()
         .<String, WebSubConfig>getLocalMap("notification-config")
+        .get("default");
+    this.contextManagementConfig = this.vertx
+        .sharedData()
+        .<String, ContextManagementConfig>getLocalMap("context-management-config")
         .get("default");
     this.server = this.vertx.createHttpServer();
     this.server.requestHandler(
@@ -89,6 +98,7 @@ public class HttpServerVerticle extends AbstractVerticle {
         notificationConfig
     );
 
+    final ContextMgmtHandler contextHandler = new ContextMgmtHandler(this.vertx, this.contextManagementConfig);
 
     router.get("/").handler(handler::handleGetEntity);
 
@@ -170,9 +180,15 @@ public class HttpServerVerticle extends AbstractVerticle {
     }
 
     final var notificationRoute = router.post("/hub/").handler(handler::handleEntitySubscription);
-
     if (!this.notificationConfig.isEnabled()) {
       notificationRoute.disable();
+    }
+
+    // Context Management routes
+    final Route contextStreamUpdatesRoute = router.post("/" + ContextManagementConfig.CONTEXT_STREAMS_PATH)
+        .handler(contextHandler::handleContentDelivery);
+    if (!this.contextManagementConfig.isEnabled()) {
+      contextStreamUpdatesRoute.disable();
     }
 
     router.get("/query").handler(handler::handleQuery);

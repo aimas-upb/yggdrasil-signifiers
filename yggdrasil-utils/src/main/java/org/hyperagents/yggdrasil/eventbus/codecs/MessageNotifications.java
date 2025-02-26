@@ -12,7 +12,8 @@ enum MessageNotifications {
   ACTION_SUCCEEDED("actionSucceeded"),
   ACTION_FAILED("actionFailed"),
   ADD_CALLBACK("addCallback"),
-  REMOVE_CALLBACK("removeCallback");
+  REMOVE_CALLBACK("removeCallback"),
+  STREAM_UPDATED("streamUpdated");
 
   private static final String PREFIX = "org.hyperagents.yggdrasil.eventbus.notifications.";
 

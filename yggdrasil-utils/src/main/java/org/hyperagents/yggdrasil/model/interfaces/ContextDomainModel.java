@@ -2,7 +2,7 @@ package org.hyperagents.yggdrasil.model.interfaces;
 
 import java.util.List;
 
-public interface ContextDomain {
+public interface ContextDomainModel {
     /**
      * Retrieve the URI of the ContextDomain.
      * @return the URI of the ContextDomain

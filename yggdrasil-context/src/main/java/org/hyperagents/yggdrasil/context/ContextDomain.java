@@ -2,6 +2,7 @@ package org.hyperagents.yggdrasil.context;
 
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -18,6 +19,7 @@ import org.eclipse.rdf4j.repository.sail.SailRepository;
 import org.eclipse.rdf4j.sail.memory.MemoryStore;
 import org.hyperagents.yggdrasil.auth.model.CASHMERE;
 import org.hyperagents.yggdrasil.context.http.Utils;
+import org.hyperagents.yggdrasil.model.interfaces.ContextDomainModel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.streamreasoning.rsp4j.api.engine.config.EngineConfiguration;
@@ -43,24 +45,19 @@ import org.streamreasoning.rsp4j.csparql2.sysout.ResponseFormatterFactory;
 public class ContextDomain {
     private static final Logger LOGGER = LoggerFactory.getLogger(ContextDomain.class);
     
-    // Context management endpoint
-    private String contextManagementEndpoint;
-    
-    // ContextDimension and ContextEntity configuration
-    private String contextDimensionURI;
-    private Optional<String> contextEntityURI = Optional.empty();
+    // ContextDomain configuration
     private String contextDomainURI;
 
     // ContextDomain content stream of the ContextAssertion updates
-    private Optional<String> assertionStreamURI = Optional.empty();
-    private Optional<String> streamGeneratorClass = Optional.empty();
-    private LocalContextStream assertionStream;
+    private List<String> assertionStreamURIs = new ArrayList<>();
+    private List<LocalContextStream> assertionStreams = new ArrayList<>();
 
     // Query engine configuration and membership rule query
     private String membershipRuleQueryURI;
     private String engineConfigURI;
     private CSPARQLEngine membershipRuleQueryEngine;
-    private ContinuousQuery membershipRuleQuery;
+    private List<ContinuousQuery> membershipRuleQuery;
+    
     private DataStream<Graph> membershipRuleQueryResultStream;
 
     // RDF store for the graph denoting the ContextDomainGroup memberships
@@ -70,41 +67,14 @@ public class ContextDomain {
      * Construct a ContextDomain specification by providing the URI of the ContextAssertion, the URI of the ContextEntity, and the context management endpoint.
      * @param contextAssertionURI: the URI of the ContextAssertion serving as ContextDimension
      * @param contextEntityURI: the URI of the ContextEntity playing the object role in the ContextAssertion
-     * @param contextManagementEndpoint: the context management endpoint of an Yggdrasil platform instance
      * @param assertionStreamURI: the URI of the RDF stream where the updates of the ContextAssertion are published
      */
-    public ContextDomain(String contextManagementEndpoint, String contextAssertionURI, String contextEntityURI, 
-                        Optional<String> assertionStreamURI, Optional<String> streamGeneratorClass,
-                        String membershipRuleQueryURI, String engineConfigURI) {
-        // set the context management endpoint
-        this.contextManagementEndpoint = contextManagementEndpoint;
+    public ContextDomain(String contextDomainURI, String engineConfigURI,
+                        List<String> membershipRuleQueryURI, List<String> assertionStreamURIs) {
+        // set the domain URI
+        this.contextDomainURI = contextDomainURI;
+
         
-        this.contextDimensionURI = contextAssertionURI;
-        this.contextEntityURI = Optional.of(contextEntityURI);
-        
-        // get the local name of the ContextDimension
-        String contextDimensionLocalName = Utils.getConceptLocalName(contextAssertionURI);
-
-        // get the local name of the contextEntityURI
-        String contextEntityLocalName = Utils.getConceptLocalName(contextEntityURI);
-        this.contextDomainURI = contextManagementEndpoint + "/domains/" + contextEntityLocalName + "Domain";
-
-        // if an assertionStreamURI is provided, set it
-        if (assertionStreamURI.isPresent()) {
-            this.assertionStreamURI = assertionStreamURI;
-        }
-        else {
-            // Otherwise, deduce the name of the RDF stream from the contextEntityURI LocalName
-            this.assertionStreamURI = Optional.of(contextManagementEndpoint + "/streams/" + contextEntityLocalName);
-        }
-
-        // if a streamGeneratorClass is provided, set it and instantiate the assertionStream 
-        // TODO: this will have to be redone once a web-based stream generator is implemented
-        if (streamGeneratorClass.isPresent()) {
-            this.streamGeneratorClass = streamGeneratorClass;
-            this.assertionStream = setupAssertionStream(this.assertionStreamURI.get(), streamGeneratorClass.get());
-        }
-
         // set the URI of the RSPQL query that infers the membership of ContextEntities to the ContextDomainGroup
         this.membershipRuleQueryURI = membershipRuleQueryURI;
 
@@ -133,30 +103,6 @@ public class ContextDomain {
 
     private String getDomainsBaseURI() {
         return contextManagementEndpoint + "/domains";
-    }
-
-    private LocalContextStream setupAssertionStream(String assertionStreamURI, String generatorClass) {
-        // get the base URI for the RDF streams
-        String streamBaseURI = getStreamBaseURI();
-        
-        try {
-            // Load the class by name
-            Class<?> clazz = Class.forName(generatorClass);
-
-            // Get the constructor that takes a long argument
-            java.lang.reflect.Constructor<?> constructor = clazz.getConstructor();
-
-            // Instantiate the class with the provided argument
-            LocalContextStream streamInstance = (LocalContextStream)constructor.newInstance();
-
-            // Now you can use the instance of the class
-            LOGGER.info("Instantiated the stream generator class " + generatorClass + " for the assertion stream " + assertionStreamURI);
-
-            return streamInstance;
-        } catch (Exception e) {
-            LOGGER.error("Error while instantiating the stream generator class " + generatorClass + ": " + e.getMessage());
-            return null;
-        }
     }
 
     private void initEngine() throws MalformedURLException, ConfigurationException {
@@ -221,16 +167,8 @@ public class ContextDomain {
         }
     }
 
-    public String getContextDimensionURI() {
-        return contextDimensionURI;
-    }
-
     public String getContextDomainURI() {
         return contextDomainURI;
-    }
-
-    public Optional<String> getContextEntityURI() {
-        return contextEntityURI;
     }
 
     public String getContextDomainGroupURI() {
@@ -282,5 +220,28 @@ public class ContextDomain {
     public static String getDomainFromGroup(String contextDomainGroupURI) {
         // remove the path element "group" from the contextDomainGroupURI
         return contextDomainGroupURI.replace("/group", "");
+    }
+
+    public static ContextDomain fromModel(ContextDomainModel contextDomainModel) {
+        String contextDomainURI = contextDomainModel.getDomainUri();
+        List<String> membershipRuleURLs = contextDomainModel.getMembershipRules();
+        String engineConfigURL = contextDomainModel.getEngineConfigUrl();
+        List<String> streams = contextDomainModel.getStreams();
+        
+
+        // if a stream URI is provided, set it
+        Optional<String> assertionStreamURI = Optional.ofNullable(contextDomainConfig.getString("stream")); 
+        String ruleURI = contextDomainConfig.getString("rule");
+
+        // if a local stream generator class is provided, set it
+        Optional<String> streamGeneratorClass = Optional.ofNullable(contextDomainConfig.getString("generatorClass"));
+        
+
+        // create the ContextDomain object and add it to the contextDomains map
+        ContextDomain contextDomain = new ContextDomain(serviceURI, contextAssertionURI, contextEntityURI, 
+                                                        assertionStreamURI, streamGeneratorClass,
+                                                        ruleURI, engineConfigURI);
+
+        return contextDomain;
     }
 }

@@ -52,11 +52,9 @@
     
     "context-streams": [
       {
-        "stream_url": "http://localhost:8080/context/streams/LocatedAt",
+        "stream_uri": "http://localhost:8080/context/streams/LocatedAt",
         "ontology_url": "file:///home/alex/OneDrive/AI-MAS/projects/2022-CASHMERE/dev/yggdrasil/yggdrasil-context/src/test/resources/context/upb-hmas-ont.ttl",
-        "generator_class": "org.hyperagents.yggdrasil.context.LocatedAtContextStream",
         
-        "single_assertion": true,
         "assertions": [
           "http://example.org/LocatedAt"
         ]

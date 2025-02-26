@@ -1,5 +1,9 @@
 package org.hyperagents.yggdrasil.eventbus.codecs;
 
+import java.lang.reflect.Type;
+
+import org.hyperagents.yggdrasil.eventbus.messages.HttpNotificationDispatcherMessage;
+
 import com.google.gson.JsonDeserializationContext;
 import com.google.gson.JsonDeserializer;
 import com.google.gson.JsonElement;
@@ -7,8 +11,6 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonSerializationContext;
 import com.google.gson.JsonSerializer;
-import java.lang.reflect.Type;
-import org.hyperagents.yggdrasil.eventbus.messages.HttpNotificationDispatcherMessage;
 
 /**
  * This class is responsible for marshalling and unmarshalling HttpNotificationDispatcherMessage
@@ -67,6 +69,10 @@ public class HttpNotificationDispatcherMessageMarshaller
       case REMOVE_CALLBACK -> new HttpNotificationDispatcherMessage.RemoveCallback(
         jsonObject.get(MessageFields.REQUEST_URI.getName()).getAsString(),
         jsonObject.get(MessageFields.CALLBACK_IRI.getName()).getAsString()
+      );
+      case STREAM_UPDATED -> new HttpNotificationDispatcherMessage.UpdateStream(
+        jsonObject.get(MessageFields.REQUEST_URI.getName()).getAsString(),
+        jsonObject.get(MessageFields.NOTIFICATION_CONTENT.getName()).getAsString()
       );
     };
   }
@@ -142,6 +148,13 @@ public class HttpNotificationDispatcherMessageMarshaller
         json.addProperty(
             MessageFields.REQUEST_METHOD.getName(),
             MessageNotifications.REMOVE_CALLBACK.getName()
+        );
+      }
+      case HttpNotificationDispatcherMessage.UpdateStream m -> {
+        json.addProperty(MessageFields.NOTIFICATION_CONTENT.getName(), m.content());
+        json.addProperty(
+            MessageFields.REQUEST_METHOD.getName(),
+            MessageNotifications.STREAM_UPDATED.getName()
         );
       }
     }

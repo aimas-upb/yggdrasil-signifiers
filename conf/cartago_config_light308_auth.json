@@ -18,7 +18,7 @@
     "known-artifacts" : [
       {
         "class" : "http://example.org/HueLamp",
-        "template" : "org.hyperagents.yggdrasil.cartago.artifacts.HueLampTD"
+        "template" : "org.hyperagents.yggdrasil.auth.artifacts.AuthHueLampTD"
       }
     ],
     "workspaces" : [
@@ -29,11 +29,14 @@
           {
             "name" : "light308",
             "class" : "http://example.org/HueLamp",
+            "representation": "yggdrasil-context/src/test/resources/td/light308_auth_artifact_td.ttl",
             "init-params" : [
               "off",
               "blue"
             ],
-            "focused-by" : ["alex_agent"]
+            "focused-by" : ["alex_agent"],
+            "access-policy-url": 
+              "file:///home/alex/OneDrive/AI-MAS/projects/2022-CASHMERE/dev/yggdrasil-cashmere/src/test/resources/upb-hmas-context-access-condition-shapes.ttl"
           }
         ],
         "joined-by" : ["alex_agent"]

@@ -5,6 +5,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+
 import org.hyperagents.yggdrasil.model.interfaces.Artifact;
 import org.hyperagents.yggdrasil.model.interfaces.YggdrasilAgent;
 
@@ -20,6 +21,7 @@ public class ArtifactImpl implements Artifact {
   private final Path metadata;
   private final List<String> focusedBy;
   private final YggdrasilAgent createdBy;
+  private final String contextAccessPolicyURL;
 
   /**
    *  Default constructor.
@@ -27,12 +29,13 @@ public class ArtifactImpl implements Artifact {
   public ArtifactImpl(final String name, final String clazz,
                       final YggdrasilAgent createdBy, final List<?> initializationParameters,
                       final String representation, final String metadata,
-                      final List<String> focusedBy) {
+                      final List<String> focusedBy, final String contextAccessPolicyURL) {
     this.name = name;
     this.clazz = clazz;
     this.createdBy = createdBy;
     this.initializationParameters = List.copyOf(initializationParameters);
     this.focusedBy = List.copyOf(focusedBy);
+    this.contextAccessPolicyURL = contextAccessPolicyURL;
 
     if (representation != null && new File(representation).isFile()) {
       this.representation = Path.of(representation);
@@ -101,5 +104,10 @@ public class ArtifactImpl implements Artifact {
   @Override
   public Optional<YggdrasilAgent> getCreatedBy() {
     return Optional.ofNullable(createdBy);
+  }
+
+  @Override
+  public Optional<String> getContextAccessPolicyURL() {
+    return Optional.ofNullable(contextAccessPolicyURL);
   }
 }

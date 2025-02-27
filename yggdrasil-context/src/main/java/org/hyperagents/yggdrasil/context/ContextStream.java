@@ -9,14 +9,19 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.apache.jena.graph.Graph;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.streamreasoning.rsp4j.api.stream.data.DataStream;
 import org.streamreasoning.rsp4j.io.DataStreamImpl;
 
 
-public class ContextStream extends DataStreamImpl<Graph> {
+public class ContextStream {
     
     private static final Logger LOGGER = LogManager.getLogger(ContextStream.class);
 
     private final String streamName;
+    private final String streamURI;
+
+    private DataStream<Graph> dataStream;
+
     private final AtomicLong lastUpdateTimestamp = new AtomicLong(0);
 
     /**
@@ -30,17 +35,25 @@ public class ContextStream extends DataStreamImpl<Graph> {
     private final List<String> contextAssertionTypes = new ArrayList<>();
 
     public ContextStream(String streamURI, String ontologyURL, List<String> contextAssertionTypes) {
-        super(streamURI);
+        
+        this.streamURI = streamURI;
         this.streamName = extractStreamName(streamURI);
         this.ontologyURL = Optional.ofNullable(ontologyURL);
 
         if (contextAssertionTypes != null) {
             this.contextAssertionTypes.addAll(contextAssertionTypes);
         }
+
+        // initialize the data stream
+        dataStream = new DataStreamImpl<>(streamURI);
     }
 
-    public URI getStreamURI() {
-        return URI.create(stream_uri);
+    /**
+     * Returns the URI of the stream.
+     * @return A string representing the URI of the stream.
+     */
+    public String getStreamURI() {
+        return streamURI;
     }
 
     /**
@@ -81,6 +94,33 @@ public class ContextStream extends DataStreamImpl<Graph> {
      */
     public long getLastUpdateTimestamp() {
         return lastUpdateTimestamp.get();
+    }
+
+    /**
+     * Get the data stream to which this Context Stream writes its updates.
+     * @return The DataStream to which this Context Stream writes its updates.
+     */
+    public DataStream<Graph> getDataStream() {
+        return dataStream;
+    }
+
+    /**
+     * Update the stream with a new graph and timestamp of the update.
+     * @param graph The new RDF graph containing the updated data.
+     * @param timestamp The timestamp of the update in milliseconds.
+     */
+    public void updateStream(Graph graph, long timestamp) {
+        dataStream.put(graph, timestamp);
+        lastUpdateTimestamp.set(timestamp);
+    }
+
+    /**
+     * Set the data stream to which this ContextStream writes its updates. 
+     * Such a request can come when registering the ContextStream with a CSPARQL engine, for example.
+     * @param dataStream The DataStream to which this ContextStream writes its updates.
+     */
+    public void setWritableStream(DataStream<Graph> dataStream) {
+        this.dataStream = dataStream;
     }
 
     /**

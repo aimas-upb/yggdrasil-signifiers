@@ -1,6 +1,7 @@
 package org.hyperagents.yggdrasil.model.impl;
 
 import java.util.Objects;
+
 import org.hyperagents.yggdrasil.model.interfaces.KnownArtifact;
 
 /**
@@ -11,6 +12,7 @@ public class KnownArtifactImpl implements KnownArtifact {
   private final String clazz;
   private final String template;
 
+  
   public KnownArtifactImpl(final String clazz, final String template) {
     this.clazz = clazz;
     this.template = template;

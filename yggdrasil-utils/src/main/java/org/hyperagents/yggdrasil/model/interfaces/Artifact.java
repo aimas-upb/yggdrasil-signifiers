@@ -28,4 +28,6 @@ public interface Artifact {
   Optional<YggdrasilAgent> getCreatedBy();
 
   List<String> getFocusedBy();
+
+  Optional<String> getContextAccessPolicyURL();
 }

@@ -89,5 +89,5 @@ ex:Lab308MembershipCondition
     sh:targetNode cashmere:accessRequester ;
     sh:property [
         sh:path cashmere:memberIn ;
-        sh:hasValue <http://example.org/environments/upb_hmas/ctxmgmt/domains/lab308Domain/group> ;
+        sh:hasValue <http://localhost:8080/context/domains/lab308Domain/group> ;
     ] .

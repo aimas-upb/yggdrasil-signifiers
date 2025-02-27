@@ -1,7 +1,6 @@
 package org.hyperagents.yggdrasil.model.impl;
 
 
-import io.vertx.core.json.JsonObject;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
@@ -10,6 +9,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+
 import org.hyperagents.yggdrasil.model.interfaces.Artifact;
 import org.hyperagents.yggdrasil.model.interfaces.KnownArtifact;
 import org.hyperagents.yggdrasil.model.interfaces.Workspace;
@@ -17,6 +17,8 @@ import org.hyperagents.yggdrasil.model.interfaces.YggdrasilAgent;
 import org.hyperagents.yggdrasil.model.parser.EnvironmentParser;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+
+import io.vertx.core.json.JsonObject;
 
 @SuppressWarnings("PMD.JUnitTestsShouldIncludeAssert")
 class EnvironmentParserTest {
@@ -57,7 +59,8 @@ class EnvironmentParserTest {
             List.of(),
             null,
             METADATA_ARTIFACT,
-            List.of("test_name")
+            List.of("test_name"),
+            null
         )
     );
 

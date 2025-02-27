@@ -184,11 +184,20 @@ public class HttpServerVerticle extends AbstractVerticle {
       notificationRoute.disable();
     }
 
-    // Context Management routes
+    // ======== Context Management routes ========
+    // Route that handles requests to verify if a subscription 
+    // for a context stream (given in the hub.topic query parameter) is valid
+    final Route contextStreamSubscriptionVerification = router.get("/" + ContextManagementConfig.CONTEXT_STREAMS_PATH)
+        .handler(contextHandler::handleVerifyContextStreamSubscription);
+    
+    // Route that handles requests to update a context stream
     final Route contextStreamUpdatesRoute = router.post("/" + ContextManagementConfig.CONTEXT_STREAMS_PATH)
-        .handler(contextHandler::handleContentDelivery);
+        .handler(contextHandler::handleContextStreamUpdate);
+
+    // If the context management service is disabled, disable the context management routes
     if (!this.contextManagementConfig.isEnabled()) {
       contextStreamUpdatesRoute.disable();
+      contextStreamSubscriptionVerification.disable();
     }
 
     router.get("/query").handler(handler::handleQuery);

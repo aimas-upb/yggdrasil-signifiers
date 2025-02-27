@@ -1,10 +1,5 @@
 package org.hyperagents.yggdrasil;
 
-import io.vertx.config.ConfigRetriever;
-import io.vertx.core.AbstractVerticle;
-import io.vertx.core.DeploymentOptions;
-import io.vertx.core.Future;
-import io.vertx.core.Promise;
 import org.hyperagents.yggdrasil.http.HttpServerVerticle;
 import org.hyperagents.yggdrasil.model.interfaces.Environment;
 import org.hyperagents.yggdrasil.model.parser.EnvironmentParser;
@@ -12,9 +7,16 @@ import org.hyperagents.yggdrasil.store.RdfStoreVerticle;
 import org.hyperagents.yggdrasil.utils.EnvironmentConfig;
 import org.hyperagents.yggdrasil.utils.HttpInterfaceConfig;
 import org.hyperagents.yggdrasil.utils.WebSubConfig;
+import org.hyperagents.yggdrasil.utils.impl.ContextManagementConfigImpl;
 import org.hyperagents.yggdrasil.utils.impl.EnvironmentConfigImpl;
 import org.hyperagents.yggdrasil.utils.impl.HttpInterfaceConfigImpl;
 import org.hyperagents.yggdrasil.utils.impl.WebSubConfigImpl;
+
+import io.vertx.config.ConfigRetriever;
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.DeploymentOptions;
+import io.vertx.core.Future;
+import io.vertx.core.Promise;
 
 /**
  * This is the MainVerticle of the Application.
@@ -57,6 +59,9 @@ public class MainVerticle extends AbstractVerticle {
         Future.succeededFuture()).compose(v -> new EnvironmentConfigImpl(c).isEnabled()
         ?
         this.vertx.deployVerticle("org.hyperagents.yggdrasil.cartago.CartagoVerticle") :
+        Future.succeededFuture()).compose(v -> new ContextManagementConfigImpl(c).isEnabled()
+        ?
+        this.vertx.deployVerticle("org.hyperagents.yggdrasil.context.http.ContextMgmtVerticle") :
         Future.succeededFuture());
     }).<Void>mapEmpty().onComplete(startPromise);
   }

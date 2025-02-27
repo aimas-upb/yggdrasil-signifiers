@@ -1,7 +1,5 @@
 package org.hyperagents.yggdrasil.model.parser;
 
-import io.vertx.core.json.JsonArray;
-import io.vertx.core.json.JsonObject;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -12,6 +10,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.hyperagents.yggdrasil.model.impl.AgentBodyImpl;
@@ -27,6 +26,9 @@ import org.hyperagents.yggdrasil.model.interfaces.KnownArtifact;
 import org.hyperagents.yggdrasil.model.interfaces.Workspace;
 import org.hyperagents.yggdrasil.model.interfaces.YggdrasilAgent;
 import org.hyperagents.yggdrasil.utils.JsonObjectUtils;
+
+import io.vertx.core.json.JsonArray;
+import io.vertx.core.json.JsonObject;
 
 /**
  * This class is responsible for parsing the environment configuration
@@ -264,7 +266,8 @@ public final class EnvironmentParser {
                       JsonObjectUtils.getString(ar, METADATA, LOGGER::error).orElse(null),
                       JsonObjectUtils.getJsonArray(ar, "focused-by", LOGGER::error)
                         .stream().flatMap(a -> IntStream.range(0, a.size()).mapToObj(a::getValue))
-                        .map(a -> (String) a).toList()
+                        .map(a -> (String) a).toList(),
+                      JsonObjectUtils.getString(ar, "context-access-policy-url", LOGGER::error).orElse(null)
                     ));
                   }
 
@@ -280,7 +283,8 @@ public final class EnvironmentParser {
                     JsonObjectUtils.getString(ar, METADATA, LOGGER::error).orElse(null),
                     JsonObjectUtils.getJsonArray(ar, "focused-by", LOGGER::error)
                       .stream().flatMap(a -> IntStream.range(0, a.size()).mapToObj(a::getValue))
-                      .map(a -> (String) a).toList()
+                      .map(a -> (String) a).toList(),
+                    JsonObjectUtils.getString(ar, "context-access-policy-url", LOGGER::error).orElse(null)
                   ));
                 })
                 .collect(Collectors.toSet()),

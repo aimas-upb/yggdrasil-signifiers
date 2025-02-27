@@ -2,6 +2,7 @@ package org.hyperagents.yggdrasil.context.http;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
@@ -9,12 +10,17 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import org.apache.http.HttpResponse;
+import org.apache.http.HttpStatus;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.HttpClients;
+import org.apache.jena.graph.Graph;
+import org.apache.jena.riot.Lang;
+import org.apache.jena.riot.RDFParser;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.eclipse.rdf4j.common.exception.ValidationException;
@@ -35,8 +41,10 @@ import org.hyperagents.yggdrasil.auth.model.CASHMERE;
 import org.hyperagents.yggdrasil.context.ContextDomain;
 import org.hyperagents.yggdrasil.context.ContextStream;
 import org.hyperagents.yggdrasil.eventbus.messageboxes.ContextMessageBox;
+import org.hyperagents.yggdrasil.eventbus.messages.ContextMessage;
 import org.hyperagents.yggdrasil.model.interfaces.ContextDomainModel;
 import org.hyperagents.yggdrasil.model.interfaces.ContextStreamModel;
+import org.hyperagents.yggdrasil.model.interfaces.Environment;
 import org.hyperagents.yggdrasil.utils.ContextManagementConfig;
 import org.hyperagents.yggdrasil.utils.HttpInterfaceConfig;
 import org.hyperagents.yggdrasil.utils.WebSubConfig;
@@ -44,6 +52,7 @@ import org.hyperagents.yggdrasil.utils.WebSubConfig;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Promise;
 import io.vertx.core.eventbus.Message;
 import io.vertx.core.json.JsonObject;
 
@@ -70,21 +79,20 @@ public class ContextMgmtVerticle extends AbstractVerticle {
     // A Map linking the URI of the ContextDomain to the ContextDomain object
     private Map<String, ContextDomain> contextDomains;
     
-    // A Map linking dynamic ContextAssertions to the RDF stream URI on which their updates are published
-    private Map<String, String> dynamicContextAssertions;
-
     // A SailRepository object containing Named Graphs with SHACL shapes that define the context access conditions required for 
     // access to a particular Artifact.
     private SailRepository contextAccessConditionsRepo;
     private Map<String, String> artifactPolicies;
 
     @Override
-    public void start() {
+    public void start(final Promise<Void> startPromise) {
         // retrieve the configuration object for the context management service
         this.contextManagementConfig = this.vertx.sharedData()
             .<String, ContextManagementConfig>getLocalMap("context-management-config")
             .get("default");
-
+        final var environment = this.vertx.sharedData()
+            .<String, Environment>getLocalMap("environment")
+            .get("default");
         final var httpConfig = this.vertx.sharedData()
             .<String, HttpInterfaceConfig>getLocalMap("http-config")
             .get("default");
@@ -92,30 +100,40 @@ public class ContextMgmtVerticle extends AbstractVerticle {
             .<String, WebSubConfig>getLocalMap("notification-config")
             .get("default");
 
-        //create message box for operations handling
-        final var ContextMessageBox = new ContextMessageBox(this.vertx.eventBus(), this.contextManagementConfig);
-
         // initialize the map of context domains, the map of dynamic context assertions and the map of artifact policies
         contextDomains = new HashMap<>();
-        dynamicContextAssertions = new HashMap<>();
         artifactPolicies = new HashMap<>();
         
         // get the service URI from the configuration
         this.serviceURI = contextManagementConfig.getServiceURI();
 
-        setupStaticContextRepo(contextManagementConfig);
-        setupProfiledContextRepo(contextManagementConfig);
-        setupCDGMembershipRepo(contextManagementConfig);
+        try {
+            setupStaticContextRepo(contextManagementConfig);
+            setupProfiledContextRepo(contextManagementConfig);
+            
+            // Set up the Context Stream monitoring by subscribing to the WebSub notifications for ContextStream updates
+            initializeContextStreams(contextManagementConfig, httpConfig, notificationConfig);
+
+            // Set up the Context Domain Groups and Context Domains
+            setupCDGMembershipRepo(contextManagementConfig);
+
+            // Set up the context access conditions repository
+            setupContextAccessConditionsRepo(contextManagementConfig, httpConfig, environment);
+        }
+        catch (Exception e) {
+            LOGGER.error("Error setting up the context management service: " + e.getMessage());
+            startPromise.fail(e);
+        }
         
-
-        // Set up the Context Stream monitoring by subscribing to the WebSub notifications for ContextStream updates
-        initializeContextStreams(contextManagementConfig, httpConfig, notificationConfig);
-
-        // Set up the context access conditions repository
-        setupContextAccessConditionsRepo(contextManagementConfig);
+        // setup handling of messages from the event bus
+        final var contextMessageBox = new ContextMessageBox(this.vertx.eventBus(), this.contextManagementConfig);
+        contextMessageBox.init();
+        setupRequestHandling(contextMessageBox);
+        
+        startPromise.complete();
     }
 
-    private void setupStaticContextRepo(ContextManagementConfig config) {
+    private void setupStaticContextRepo(ContextManagementConfig config) throws Exception {
         // First, set up the static context repository. We set it up as a SailRepository over an in-memory store.
         staticContextRepo = new SailRepository(new MemoryStore());
         
@@ -132,16 +150,20 @@ public class ContextMgmtVerticle extends AbstractVerticle {
 
         } catch (MalformedURLException e) {
             LOGGER.error("Malformed URL for source of default static context information: " + config.getStaticContextGraphURI() + ". Reason: " + e.getMessage());
+            throw new Exception("Error setting up static context graph", e);
         } catch (RDFParseException e) {
             LOGGER.error("Error parsing the RDF content of the default static context information: " + config.getStaticContextGraphURI() + ". Reason: " + e.getMessage());
+            throw new Exception("Error setting up static context graph", e);
         } catch (RepositoryException e) {
             LOGGER.error("Error adding the RDF content of the default static context information to the static repository: " + ". Reason: " + e.getMessage());
+            throw new Exception("Error setting up static context graph", e);
         } catch (IOException e) {
             LOGGER.error("Error reading the RDF content of the default static context information from the source: " + config.getStaticContextGraphURI() + ". Reason: " + e.getMessage());
+            throw new Exception("Error setting up static context graph", e);
         } 
     }
 
-    private void setupProfiledContextRepo(ContextManagementConfig config) {
+    private void setupProfiledContextRepo(ContextManagementConfig config) throws Exception {
         // Set up the profiled context repository. We set it up as a SailRepository over an in-memory store.
         profiledContextRepo = new SailRepository(new MemoryStore());
         
@@ -158,26 +180,41 @@ public class ContextMgmtVerticle extends AbstractVerticle {
 
         } catch (MalformedURLException e) {
             LOGGER.error("Malformed URL for source of profiled context information: " + config.getProfiledContextGraphURI() + ". Reason: " + e.getMessage());
+            throw new Exception("Error setting up profiled context graph", e);
         } catch (RDFParseException e) {
             LOGGER.error("Error parsing the RDF content of the profiled context information: " + config.getProfiledContextGraphURI() + ". Reason: " + e.getMessage());
+            throw new Exception("Error setting up profiled context graph", e);
         } catch (RepositoryException e) {
             LOGGER.error("Error adding the RDF content of the profiled context information to the profiled repository: " + ". Reason: " + e.getMessage());
+            throw new Exception("Error setting up profiled context graph", e);
         } catch (IOException e) {
             LOGGER.error("Error reading the RDF content of the profiled context information from the source: " + config.getProfiledContextGraphURI() + ". Reason: " + e.getMessage());
+            throw new Exception("Error setting up profiled context graph", e);
         } 
     }
 
-    private void setupCDGMembershipRepo(ContextManagementConfig config) {
+    private void setupCDGMembershipRepo(ContextManagementConfig config) throws Exception {
         // Set up the ContextDomains. 
         for (ContextDomainModel contextDomainModel : config.getContextDomains()) {
-            ContextDomain contextDomain = ContextDomain.fromModel(contextDomainModel);
+            // get the list of stream URIs to which the context domain membership rules require subscription
+            List<String> requiredStreamURIs = contextDomainModel.getStreams();
+
+            // If the list of required stream URIs is not covered by the contextStreamMap, throw an exception
+            if (!contextStreamMap.keySet().containsAll(requiredStreamURIs)) {
+                throw new Exception("Error setting up context domain group membership repository: Required context streams not found." 
+                    + "Missing streams: " + Set.copyOf(requiredStreamURIs).removeAll(contextStreamMap.keySet()));
+            }
+
+            List<ContextStream> requiredContextStreams = requiredStreamURIs.stream()
+                .map(streamURI -> contextStreamMap.get(streamURI))
+                .toList();
+
+            ContextDomain contextDomain = new ContextDomain(contextDomainModel.getDomainUri(), 
+                                                            contextDomainModel.getEngineConfigUrl(), 
+                                                            contextDomainModel.getMembershipRules(),
+                                                            requiredContextStreams); 
             contextDomains.put(contextDomainModel.getDomainUri(), contextDomain);
         }
-    }
-
-    private void setupContextDomainFromModel(ContextDomainModel contextDomainModel) {
-        // TODO: Implement this method
-        // contextDomains.put(contextDomainURI, contextDomain);
     }
 
     // ============================================================================
@@ -234,46 +271,113 @@ public class ContextMgmtVerticle extends AbstractVerticle {
     }
 
 
-    private void setupContextAccessConditionsRepo(ContextManagementConfig config) {
+    private void setupContextAccessConditionsRepo(ContextManagementConfig ctxConfig, HttpInterfaceConfig httpConfig, Environment env)
+            throws Exception {
         ShaclSail shaclSail = new ShaclSail(new MemoryStore());
         contextAccessConditionsRepo = new SailRepository(shaclSail);
 
-        // read the artifact-policies JSON object from the configuration
-        JsonObject artifactPolicies = config.getJsonObject("artifact-policies");
-        for (String artifactURI : artifactPolicies.fieldNames()) {
-            // add the entry to the artifactPolicies map
-            String policyURI = artifactPolicies.getString(artifactURI);
-            this.artifactPolicies.put(artifactURI, policyURI);
+        // read the artifact-policies JSON object from the known-artifacts part of the envConfig
+        for (var wsp : env.getWorkspaces()) {
+            for (var artifact : wsp.getArtifacts()) {
+                if (artifact.getContextAccessPolicyURL().isPresent()) {
+                    // form the URL path that will correspond at runtime to this artifact
+                    String artifactPath = "/workspaces/" + wsp.getName() + "/artifacts/" + artifact.getName() + "#artifact";
+                    String artifactURL = httpConfig.getBaseUri() + artifactPath;
+                    artifactPolicies.put(artifactURL, artifact.getContextAccessPolicyURL().get());
 
-            // Dereference the policy URI as a file and add the contents to the contextAccessConditionsRepo.
-            // They are added in a named graph with the artifact URI as the graph name.
-            try {
-                IRI contextIRI = SimpleValueFactory.getInstance().createIRI(artifactURI);
-                URL policyURL = URI.create(policyURI).toURL();
-                contextAccessConditionsRepo.getConnection().add(policyURL, null, RDFFormat.TURTLE, contextIRI);
-            } catch (MalformedURLException e) {
-                LOGGER.error("Malformed URL for source of context access conditions for artifact " + artifactURI + ": " + policyURI + ". Reason: " + e.getMessage());
-            } catch (RDFParseException e) {
-                LOGGER.error("Error parsing the RDF content of the context access conditions for artifact " + artifactURI + ": " + policyURI + ". Reason: " + e.getMessage());
-            } catch (RepositoryException e) {
-                LOGGER.error("Error adding the RDF content of the context access conditions for artifact " + artifactURI + " to the context access conditions repository: " + ". Reason: " + e.getMessage());
-            } catch (IOException e) {
-                LOGGER.error("Error reading the RDF content of the context access conditions for artifact " + artifactURI + " from the source: " + policyURI + ". Reason: " + e.getMessage());
+                    // Dereference the policy URI as a file and add the contents to the contextAccessConditionsRepo.
+                    // They are added in a named graph with the artifact URI as the graph name.
+                    try {
+                        IRI contextIRI = SimpleValueFactory.getInstance().createIRI(artifactURL);
+                        URL policyURL = URI.create(artifact.getContextAccessPolicyURL().get()).toURL();
+                        contextAccessConditionsRepo.getConnection().add(policyURL, null, RDFFormat.TURTLE, contextIRI);
+                    } catch (MalformedURLException e) {
+                        LOGGER.error("Malformed URL for source of context access conditions for artifact " + artifactURL + ": " + artifact.getContextAccessPolicyURL().get() 
+                            + ". Reason: " + e.getMessage());
+                        throw new Exception("Error setting up context access conditions repository", e);
+                    } catch (RDFParseException e) {
+                        LOGGER.error("Error parsing the RDF content of the context access conditions for artifact " + artifactURL + ": " + artifact.getContextAccessPolicyURL().get() 
+                            + ". Reason: " + e.getMessage());
+                            throw new Exception("Error setting up context access conditions repository", e);
+                    } catch (RepositoryException e) {
+                        LOGGER.error("Error adding the RDF content of the context access conditions for artifact " + artifactURL + " to the context access conditions repository: " 
+                            + ". Reason: " + e.getMessage());
+                            throw new Exception("Error setting up context access conditions repository", e);
+                    } catch (IOException e) {
+                        LOGGER.error("Error reading the RDF content of the context access conditions for artifact " + artifactURL + " from the source: " + artifact.getContextAccessPolicyURL().get() 
+                            + ". Reason: " + e.getMessage());
+                        throw new Exception("Error setting up context access conditions repository", e);
+                    }
+                }
             }
         }
     }
 
-    private void handleContextRequest(Message<String> message) {
-        LOGGER.info("Handling Context Request...");
-        String contextService = message.headers().get(ContextMgmtVerticle.CONTEXT_SERVICE);
-         
-        switch (contextService) {
-            case ContextMgmtVerticle.VALIDATE_CONTEXT_BASED_ACCESS -> {
-                LOGGER.info("Handling Context-based access validation action...");
-                validateContextBasedAccess(message);
-            }
-            default -> LOGGER.info("Context service " + contextService + " not supported yet");
+    // ============================================================================
+    // =================== Methods for handling context requests ==================
+    // ============================================================================
+    private void setupRequestHandling(ContextMessageBox contextMessageBox) {
+         contextMessageBox.receiveMessages(
+            message -> {
+                LOGGER.info("Handling Context Request...");
+                
+                try {
+                    switch (message.body()) {
+                        case ContextMessage.ValidateContextBasecAccess msgContent -> {
+                            LOGGER.info("Handling Context-based access validation action...");
+                            validateContextBasedAccess(msgContent.accessRequesterURI(), msgContent.accessedResourceURI(), message);
+                        }
+                        case ContextMessage.GetStaticContext msgContent -> {
+                            LOGGER.info("Handling GetStaticContext action...");
+                            message.reply(staticContextRepo.getConnection().getStatements(null, null, null, false));
+                        }
+                        case ContextMessage.GetProfiledContext msgContent -> {
+                            // TODO: Implement the GetProfiledContext action such that we retrieve all statements related to the ContextAssertion
+                            // referenced by the msgContent.contextAssertionType() from the profiledContextRepo
+                            LOGGER.info("Handling GetProfiledContext action...");
+                            message.reply(profiledContextRepo.getConnection().getStatements(null, null, null, false));
+                        }
+                        case ContextMessage.ContextStreamUpdate streamUpdate -> {
+                            LOGGER.info("Received request to update context stream: " + streamUpdate.streamURI());  
+                            updateContextStream(streamUpdate.streamURI(), streamUpdate.updateContent(), streamUpdate.updateTimestamp(), message);
+                        }
+                        default -> {
+                            LOGGER.warn("Received an unknown message type: " + message.body().getClass().getName());
+                            message.fail(HttpStatus.SC_BAD_REQUEST, "Unknown message type.");
+                        }
+                    }
+                }
+                catch (final IllegalArgumentException e) {
+                    LOGGER.error(e);
+                    message.fail(HttpStatus.SC_BAD_REQUEST, "Arguments badly formatted.");
+                } catch (final UncheckedIOException e) {
+                    LOGGER.error(e);
+                    message.fail(HttpStatus.SC_INTERNAL_SERVER_ERROR, "Store request failed.");
+                }
+        });  
+    }
+
+    private void updateContextStream(String streamURI, String graphSerialized, long updateTimestamp, Message<ContextMessage> message) {
+        // Get the ContextStream object corresponding to the streamURI
+        ContextStream stream = contextStreamMap.get(streamURI);
+        
+        if (stream == null) {
+            message.fail(HttpStatus.SC_NOT_FOUND, "Unknown stream: " + streamURI);
+            return;
         }
+        
+        // Transform the updateContent into a set of RDF statements
+        // Parse the RDF graph from Turtle serialization
+        Graph graph = RDFParser.create()
+            .fromString(graphSerialized)
+            .lang(Lang.TURTLE)
+            .toGraph();
+
+        // Update the stream with the new content
+        stream.updateStream(graph, updateTimestamp);
+        
+        // Reply to the message with a success message
+        message.reply("Stream " + streamURI + " updated successfully.");
     }
 
     // ============================================================================
@@ -319,21 +423,17 @@ public class ContextMgmtVerticle extends AbstractVerticle {
     }
 
 
-    private void validateContextBasedAccess(Message<String> message) {
+    private void validateContextBasedAccess(String accessRequesterURI, String accessedResourceURI, Message<ContextMessage> message) {
         // To validate context access we must bring together the static, profiled and dynamic context information
         // from their respective repositories and validate the access request against them.
         // In the current version we assume that all context repositories are handled at platform level and are 
         // available directly to the ContextMgmtVerticle.
         // TODO: handle the case when the context repositories are managed by the artifacts themselves.
 
-        // Extract from the message the URI of the agent requesting access and the URI of the artifact being accessed
-        String accessRequesterURI = message.headers().get(ContextMgmtVerticle.ACCESS_REQUESTER_URI);
-        String accessedArtifactURI = message.headers().get(ContextMgmtVerticle.ACCESSED_RESOURCE_URI);
-        
         // If the artifact is not access protected, allow access by default
-        if (!isAccessProtected(accessedArtifactURI)) {
+        if (!isAccessProtected(accessedResourceURI)) {
             message.reply(true);
-            LOGGER.info("Access to artifact " + accessedArtifactURI + " allowed for access requester: " 
+            LOGGER.info("Access to resource " + accessRequesterURI + " allowed for access requester: " 
                         + accessRequesterURI + ". Reason: No access conditions found.");
             return;
         }
@@ -344,16 +444,16 @@ public class ContextMgmtVerticle extends AbstractVerticle {
         contextDataRepo.init();
 
         // start adding the static context information to the validationDataRepo
-        addStaticContext(contextDataRepo, accessedArtifactURI, accessRequesterURI);
+        addStaticContext(contextDataRepo, accessedResourceURI, accessRequesterURI);
 
         // start adding the profiled context information to the validationDataRepo
-        addProfiledContext(contextDataRepo, accessedArtifactURI, accessRequesterURI);
+        addProfiledContext(contextDataRepo, accessedResourceURI, accessRequesterURI);
 
         // start adding the dynamic context information to the validationDataRepo
-        addDynamicContext(contextDataRepo, accessedArtifactURI, accessRequesterURI);
+        addDynamicContext(contextDataRepo, accessedResourceURI, accessRequesterURI);
 
         // now we need to add the SHACL shapes graph containing the access conditions for the artifact to the validationDataRepo
-        Optional<List<Statement>> accessConditions = getAccessConditions(accessedArtifactURI);
+        Optional<List<Statement>> accessConditions = getAccessConditions(accessedResourceURI);
         if (accessConditions.isPresent()) {
             // create a Validation Repository as a ShaclSail in memory store
             ShaclSail shaclSailValidation = new ShaclSail(new MemoryStore());
@@ -364,7 +464,7 @@ public class ContextMgmtVerticle extends AbstractVerticle {
             validationRepo.init();
 
             // Replace the `cashmere:accessRequester` object placeholder in the access conditions with the actual accessRequesterURI
-            List<Statement> customAccessConditions = customizeAccessConditions(accessConditions.get(), accessRequesterURI, accessedArtifactURI);
+            List<Statement> customAccessConditions = customizeAccessConditions(accessConditions.get(), accessRequesterURI, accessedResourceURI);
             try (SailRepositoryConnection conn = validationRepo.getConnection()) {
                 // load the access conditions into the profiledContextRepo, under the RDF4J.SHACL_SHAPE_GRAPH context
                 conn.begin();
@@ -387,15 +487,15 @@ public class ContextMgmtVerticle extends AbstractVerticle {
                 File tempDataRepoFile = new File("/home/alex/OneDrive/AI-MAS/projects/2022-CASHMERE/dev/yggdrasil-cashmere/src/test/resources/dataRepo.ttl");
                 Utils.serializeRepoConnection(conn, tempDataRepoFile);
 
-                LOGGER.info("Access to artifact " + accessedArtifactURI + " allowed for access requester: " 
+                LOGGER.info("Access to artifact " + accessedResourceURI + " allowed for access requester: " 
                         + accessRequesterURI + ". Reason: Context validation successful.");
             } catch (Exception e) {
                 Throwable cause = e.getCause();
                 if (cause instanceof ValidationException) {
-                    LOGGER.info("Access to artifact " + accessedArtifactURI + " denied for access requester: " 
+                    LOGGER.info("Access to artifact " + accessedResourceURI + " denied for access requester: " 
                         + accessRequesterURI + ". Reason:  " + cause.getMessage()); 
                 } else {
-                    LOGGER.error("Error validating the access conditions of artifact: " + accessedArtifactURI 
+                    LOGGER.error("Error validating the access conditions of artifact: " + accessedResourceURI 
                         + " for requester: " + accessRequesterURI +  " against the profiled context repository: " + e.getMessage());
                 }
 
@@ -409,7 +509,7 @@ public class ContextMgmtVerticle extends AbstractVerticle {
         }
         else {
             // If no access conditions are found, allow access by default
-            LOGGER.info("No access conditions found in policy for artifact " + accessedArtifactURI + ". Access allowed by default.");
+            LOGGER.info("No access conditions found in policy for artifact " + accessedResourceURI + ". Access allowed by default.");
             message.reply(true);
             return;
         }

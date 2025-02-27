@@ -40,6 +40,10 @@ public class ContextMessageBox implements Messagebox<ContextMessage> {
                 ContextMessage.ValidateContextBasecAccess.class,
                 new GenericMessageCodec<>(ContextMessage.ValidateContextBasecAccess.class, new ContextManagementMessageMarshaller())
             );
+            this.eventBus.registerDefaultCodec(ContextMessage.ContextStreamUpdate.class, 
+                new GenericMessageCodec<>(ContextMessage.ContextStreamUpdate.class, new ContextManagementMessageMarshaller()));
+            this.eventBus.registerDefaultCodec(ContextMessage.VerifyContextStreamSubscription.class, 
+                new GenericMessageCodec<>(ContextMessage.VerifyContextStreamSubscription.class, new ContextManagementMessageMarshaller()));
         }
         else {
             LOGGER.warn("Context Management is not enabled. The context message exchange will not be initialized.");

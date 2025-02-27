@@ -22,7 +22,9 @@ enum MessageRequestMethods {
   QUERY("query"),
   VALIDATE_CONTEXT_BASED_ACCESS("validateContextBasedAccess"),
   GET_STATIC_CONTEXT("getStaticContext"),
-  GET_PROFILED_CONTEXT("getProfiledContext"),;
+  GET_PROFILED_CONTEXT("getProfiledContext"),
+  CONTEXT_STREAM_VERIFY_SUBSCRIPTION("contextStreamVerifySubscription"),
+  CONTEXT_STREAM_UPDATE("contextStreamUpdate");
 
   private static final String PREFIX = "org.hyperagents.yggdrasil.eventbus.methods.";
 

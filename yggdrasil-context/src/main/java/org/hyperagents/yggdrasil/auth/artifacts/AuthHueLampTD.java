@@ -2,7 +2,6 @@ package org.hyperagents.yggdrasil.auth.artifacts;
 
 import java.util.Arrays;
 
-import org.hyperagents.yggdrasil.auth.AuthorizationRegistry;
 import org.hyperagents.yggdrasil.auth.model.AuthorizationAccessType;
 import org.hyperagents.yggdrasil.auth.model.AuthorizedEntityType;
 import org.hyperagents.yggdrasil.auth.model.CASHMERE;
@@ -97,9 +96,10 @@ public class AuthHueLampTD extends ContextAuthHypermediaTDArtifact {
     // register the authorization object for the artifact
     registerAuthorization(accessAuth);
     
-    // add the read and write SharedContextAccessAuthorisation object to the AuthorisationRegistry
-    AuthorizationRegistry authRegistry = AuthorizationRegistry.getInstance();
-    authRegistry.addContextAuthorisation(getArtifactUri(), accessAuth);
+    // TODO: do NOT register the artifact authorization from here, but rather in the WAC Verticle
+    // // add the read and write SharedContextAccessAuthorisation object to the AuthorisationRegistry
+    // AuthorizationRegistry authRegistry = AuthorizationRegistry.getInstance();
+    // authRegistry.addContextAuthorisation(getArtifactUri(), accessAuth);
   }
 }
 

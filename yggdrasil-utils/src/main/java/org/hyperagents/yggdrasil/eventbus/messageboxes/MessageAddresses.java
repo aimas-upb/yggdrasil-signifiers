@@ -7,7 +7,8 @@ enum MessageAddresses {
   RDF_STORE("rdfstore"),
   CARTAGO("cartago"),
   HTTP_NOTIFICATION_DISPATCHER("dispatcher"),
-  CONTEXT_SERVICE("contextService"),;
+  CONTEXT_SERVICE("contextService"),
+  WAC_SERVICE("wacService"),;
 
   private static final String PREFIX = "org.hyperagents.yggdrasil.eventbus.";
 

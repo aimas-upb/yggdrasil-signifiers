@@ -36,7 +36,7 @@
             ],
             "focused-by" : ["alex_agent"],
             "access-policy-url": 
-              "file:///home/alex/OneDrive/AI-MAS/projects/2022-CASHMERE/dev/yggdrasil-cashmere/src/test/resources/upb-hmas-context-access-condition-shapes.ttl"
+              "file:///home/alex/OneDrive/AI-MAS/projects/2022-CASHMERE/dev/yggdrasil/yggdrasil-context/src/test/resources/td/light308_auth_artifact_td.ttl"
           }
         ],
         "joined-by" : ["alex_agent"]
@@ -76,5 +76,8 @@
         "engine_config_url": "file:///home/alex/OneDrive/AI-MAS/projects/2022-CASHMERE/dev/yggdrasil/yggdrasil-context/src/test/resources/context/lab308membership-csparql-engine-config.properties"
       }
     ]
+  },
+  "wac": {
+    "enabled": true
   }
 }

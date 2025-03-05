@@ -181,7 +181,7 @@ public class ContextBasedAuthorization {
   // Static method that parses a CASHMERE ontology based model of a shared context access authorizations 
   // and returns a list of SharedContextAccessAuthorization objects
   public static List<ContextBasedAuthorization> fromModel(Model contextAuthModel) {
-    List<ContextBasedAuthorization> sharedCtxAuths = new ArrayList<ContextBasedAuthorization>();
+    List<ContextBasedAuthorization> sharedCtxAuths = new ArrayList<>();
     
     // identify the subject of the authorization 
     Set<Resource> ctxAuthorizations = contextAuthModel.filter(null, RDF.TYPE, CASHMERE.ContextBasedAuthorization).subjects();

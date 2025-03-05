@@ -24,6 +24,8 @@ enum MessageFields {
   CONTEXT("context"),
   ACCESS_REQUESTER_URI("accessRequesterURI"),
   ACCESSED_RESOURCE_URI("accessedResourceURI"),
+  ACCESS_TYPE("accessType"),
+  AGENT_URI("agentURI"),
   CONTEXT_ASSERTION_TYPE("contextAssertionType"),
   STREAM_URI("streamURI"),
   STREAM_UPDATE_CONTENT("streamUpdateContent"),

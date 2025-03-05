@@ -55,6 +55,11 @@ public class AuthorizationRegistry {
     }
   }
 
+  public boolean hasAccessAuthorization(String artifactIRI) {
+    // return true if there exists at least one access authorization for the given artifact
+    return !registry.getContextAuthorisations(artifactIRI).isEmpty();
+  }
+
   public boolean hasAccessAuthorization(String artifactIRI, AuthorizationAccessType accessType) {
     List<ContextBasedAuthorization> accessAuthorisations = registry.getContextAuthorisations(artifactIRI);
 

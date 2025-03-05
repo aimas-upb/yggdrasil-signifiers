@@ -16,10 +16,15 @@ import org.hyperagents.yggdrasil.auth.model.ContextBasedAuthorization;
 import org.hyperagents.yggdrasil.cartago.artifacts.HypermediaTDArtifact;
 
 import cartago.CartagoException;
+import io.vertx.core.Vertx;
+import jason.environment.Environment;
 
 
 public abstract class ContextAuthHypermediaTDArtifact extends HypermediaTDArtifact {
     private static final String HASH_ARTIFACT = "#artifact";
+
+    private final Environment hmasEnvironment = Vertx.currentContext().owner().sharedData()
+            .<String, Environment>getLocalMap("environment").get("default");
 
     // The list of Authorization objects for this ContextAuthenticated Hypermedia Artifact
     protected List<ContextBasedAuthorization> authorizations = new ArrayList<>();

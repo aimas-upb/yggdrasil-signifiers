@@ -38,6 +38,7 @@ java {
 dependencies {
   implementation(project(":yggdrasil-utils"))
   implementation(project(":yggdrasil-cartago"))
+  implementation(project(":yggdrasil-context"))
 
   implementation(libs.log4j.core)
   implementation(libs.vertx.core)

@@ -18,7 +18,6 @@ import io.vertx.core.json.JsonObject;
 public class ContextManagementConfigImpl implements ContextManagementConfig {
 
     private static final Logger LOGGER = LogManager.getLogger(ContextManagementConfigImpl.class);
-    private static final String CONTEXT_SERVICE_PATH = "context/";
 
     private static final String STATIC_CONTEXT_KEY = "static-context";
     private static final String PROFILED_CONTEXT_KEY = "profiled-context";

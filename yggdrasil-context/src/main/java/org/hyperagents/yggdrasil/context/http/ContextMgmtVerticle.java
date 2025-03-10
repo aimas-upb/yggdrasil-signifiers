@@ -63,6 +63,9 @@ public class ContextMgmtVerticle extends AbstractVerticle {
     // the configuration object for the context management service
     private ContextManagementConfig contextManagementConfig;
 
+    // The base URI of the Yggdrasil platform
+    private String baseURITrailingSlash;
+
     // The URI of the context management service
     private String serviceURI;
 
@@ -104,7 +107,8 @@ public class ContextMgmtVerticle extends AbstractVerticle {
         contextDomains = new HashMap<>();
         artifactPolicies = new HashMap<>();
         
-        // get the service URI from the configuration
+        // get the base and service URIs from the configurations
+        this.baseURITrailingSlash = httpConfig.getBaseUriTrailingSlash();
         this.serviceURI = contextManagementConfig.getServiceURI();
 
         try {
@@ -119,18 +123,18 @@ public class ContextMgmtVerticle extends AbstractVerticle {
 
             // Set up the context access conditions repository
             setupContextAccessConditionsRepo(contextManagementConfig, httpConfig, environment);
+        
+            // setup handling of messages from the event bus
+            final var contextMessageBox = new ContextMessageBox(this.vertx.eventBus(), this.contextManagementConfig);
+            contextMessageBox.init();
+            setupRequestHandling(contextMessageBox);
+            
+            startPromise.complete();
         }
         catch (Exception e) {
             LOGGER.error("Error setting up the context management service: " + e.getMessage());
             startPromise.fail(e);
         }
-        
-        // setup handling of messages from the event bus
-        final var contextMessageBox = new ContextMessageBox(this.vertx.eventBus(), this.contextManagementConfig);
-        contextMessageBox.init();
-        setupRequestHandling(contextMessageBox);
-        
-        startPromise.complete();
     }
 
     private void setupStaticContextRepo(ContextManagementConfig config) throws Exception {
@@ -249,7 +253,7 @@ public class ContextMgmtVerticle extends AbstractVerticle {
      */
     private void subscribeToHub(HttpInterfaceConfig httpConfig, WebSubConfig webSubConfig, String streamUri) throws IOException {
         String hubUri = webSubConfig.getWebSubHubUri();
-        String callbackUri = serviceURI + ContextManagementConfig.STREAM_UPDATES_PATH;
+        String callbackUri = baseURITrailingSlash + ContextManagementConfig.STREAM_UPDATES_PATH;
         
         HttpClient httpClient = HttpClients.createDefault();
         HttpPost httpPost = new HttpPost(hubUri);

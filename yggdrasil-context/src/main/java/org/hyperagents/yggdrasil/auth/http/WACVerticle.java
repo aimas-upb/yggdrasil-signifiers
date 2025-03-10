@@ -84,7 +84,6 @@ public class WACVerticle extends AbstractVerticle {
 
         // setup message handling 
         this.contextMessageBox = new ContextMessageBox(vertx.eventBus(), contextManagementConfig);
-        this.contextMessageBox.init();
 
         this.wacMessageBox = new WACMessageBox(vertx.eventBus(), wacConfig);
         this.wacMessageBox.init();

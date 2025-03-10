@@ -43,5 +43,11 @@
     ],
     "enabled" : true,
     "ontology" : "td"
+  },
+  "context-management-config" : {
+    "enabled" : false
+  },
+  "wac": {
+    "enabled": false
   }
 }

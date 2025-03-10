@@ -4,12 +4,15 @@ import org.hyperagents.yggdrasil.http.HttpServerVerticle;
 import org.hyperagents.yggdrasil.model.interfaces.Environment;
 import org.hyperagents.yggdrasil.model.parser.EnvironmentParser;
 import org.hyperagents.yggdrasil.store.RdfStoreVerticle;
+import org.hyperagents.yggdrasil.utils.ContextManagementConfig;
 import org.hyperagents.yggdrasil.utils.EnvironmentConfig;
 import org.hyperagents.yggdrasil.utils.HttpInterfaceConfig;
+import org.hyperagents.yggdrasil.utils.WACConfig;
 import org.hyperagents.yggdrasil.utils.WebSubConfig;
 import org.hyperagents.yggdrasil.utils.impl.ContextManagementConfigImpl;
 import org.hyperagents.yggdrasil.utils.impl.EnvironmentConfigImpl;
 import org.hyperagents.yggdrasil.utils.impl.HttpInterfaceConfigImpl;
+import org.hyperagents.yggdrasil.utils.impl.WACConfigImpl;
 import org.hyperagents.yggdrasil.utils.impl.WebSubConfigImpl;
 
 import io.vertx.config.ConfigRetriever;
@@ -49,6 +52,16 @@ public class MainVerticle extends AbstractVerticle {
       // Environment
       this.vertx.sharedData().<String, Environment>getLocalMap("environment")
         .put(DEFAULT_CONF_VALUE, EnvironmentParser.parse(c));
+      
+      // Context Management Config
+      final var contextManagementConfig = new ContextManagementConfigImpl(c);
+      this.vertx.sharedData().<String, ContextManagementConfig>getLocalMap("context-management-config")
+        .put(DEFAULT_CONF_VALUE, contextManagementConfig);
+
+      // WAC Config
+      final var wacConfig = new WACConfigImpl(c);
+      this.vertx.sharedData().<String, WACConfig>getLocalMap("wac")
+        .put(DEFAULT_CONF_VALUE, wacConfig);
 
       // start the verticles
       return this.vertx.deployVerticle(new HttpServerVerticle()).compose(
@@ -62,6 +75,9 @@ public class MainVerticle extends AbstractVerticle {
         Future.succeededFuture()).compose(v -> new ContextManagementConfigImpl(c).isEnabled()
         ?
         this.vertx.deployVerticle("org.hyperagents.yggdrasil.context.http.ContextMgmtVerticle") :
+        Future.succeededFuture()).compose(v -> new WACConfigImpl(c).isEnabled() 
+        ? 
+        this.vertx.deployVerticle("org.hyperagents.yggdrasil.auth.http.WACVerticle") :
         Future.succeededFuture());
     }).<Void>mapEmpty().onComplete(startPromise);
   }

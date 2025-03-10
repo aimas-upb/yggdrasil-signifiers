@@ -1,10 +1,12 @@
 package org.hyperagents.yggdrasil.http;
 
 import org.apache.http.entity.ContentType;
+import org.hyperagents.yggdrasil.auth.http.WACHandler;
 import org.hyperagents.yggdrasil.context.http.ContextMgmtHandler;
 import org.hyperagents.yggdrasil.utils.ContextManagementConfig;
 import org.hyperagents.yggdrasil.utils.EnvironmentConfig;
 import org.hyperagents.yggdrasil.utils.HttpInterfaceConfig;
+import org.hyperagents.yggdrasil.utils.WACConfig;
 import org.hyperagents.yggdrasil.utils.WebSubConfig;
 
 import io.vertx.core.AbstractVerticle;
@@ -31,6 +33,7 @@ public class HttpServerVerticle extends AbstractVerticle {
   private EnvironmentConfig environmentConfig;
   private WebSubConfig notificationConfig;
   private ContextManagementConfig contextManagementConfig;
+  private WACConfig wacConfig;
 
   @Override
   public void start(final Promise<Void> startPromise) {
@@ -49,6 +52,11 @@ public class HttpServerVerticle extends AbstractVerticle {
         .sharedData()
         .<String, ContextManagementConfig>getLocalMap("context-management-config")
         .get("default");
+    this.wacConfig = this.vertx
+        .sharedData()
+        .<String, WACConfig>getLocalMap("wac")
+        .get("default");
+
     this.server = this.vertx.createHttpServer();
     this.server.requestHandler(
             this.createRouter(httpConfig, this.environmentConfig, this.notificationConfig)
@@ -98,7 +106,10 @@ public class HttpServerVerticle extends AbstractVerticle {
         notificationConfig
     );
 
+
+    // set handlers for the Context Management service and the Web Access Control authorization service
     final ContextMgmtHandler contextHandler = new ContextMgmtHandler(this.vertx, this.contextManagementConfig);
+    final WACHandler wacHandler = new WACHandler(this.vertx, httpConfig, wacConfig);
 
     router.get("/").handler(handler::handleGetEntity);
 
@@ -168,8 +179,19 @@ public class HttpServerVerticle extends AbstractVerticle {
     router.delete(ARTIFACT_PATH + "/").handler(handler::handleRedirectWithoutSlash);
     router.delete(ARTIFACT_PATH).handler(handler::handleDeleteEntity);
 
-    final var actionRoute = router.post(ARTIFACT_PATH + "/*").handler(handler::handleAction);
+    // WAC routes
+    // TODO: currently only handles artifacts, refactor to handle any resource
+    router.get(ARTIFACT_PATH + "/wac/").handler(handler::handleRedirectWithoutSlash);
+    final var artifactAuthRepresentationRoute = router.get(ARTIFACT_PATH + "/wac").handler(wacHandler::handleWACRepresentation);
 
+    if (!this.wacConfig.isEnabled()) {
+      artifactAuthRepresentationRoute.disable();
+    }
+
+    // The artifact action routes will have a wac-based authorization check
+    final var actionRoute = router.post(ARTIFACT_PATH + "/*")
+        .handler(wacHandler::filterAccess)
+        .handler(handler::handleAction);
 
     if (!this.environmentConfig.isEnabled()) {
       joinRoute.disable();
@@ -191,7 +213,7 @@ public class HttpServerVerticle extends AbstractVerticle {
         .handler(contextHandler::handleVerifyContextStreamSubscription);
     
     // Route that handles requests to update a context stream
-    final Route contextStreamUpdatesRoute = router.post("/" + ContextManagementConfig.CONTEXT_STREAMS_PATH)
+    final Route contextStreamUpdatesRoute = router.post("/" + ContextManagementConfig.STREAM_UPDATES_PATH)
         .handler(contextHandler::handleContextStreamUpdate);
 
     // If the context management service is disabled, disable the context management routes

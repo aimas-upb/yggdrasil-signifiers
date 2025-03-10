@@ -2,12 +2,12 @@ PREFIX consert: <http://pervasive.semanticweb.org/ont/2017/07/consert/core#>
 PREFIX cashmere: <https://aimas.cs.pub.ro/ont/cashmere#> 
 PREFIX ex: <http://example.org/>
 
-REGISTER RSTREAM <http://example.org/environments/upb_hmas/ctxmgmt/domains/lab308Domain/group/membership> AS
+REGISTER RSTREAM <http://localhost:8080/context/domains/lab308Domain/group/membership> AS
 CONSTRUCT {
-  ?agent cashmere:memberIn <http://example.org/environments/upb_hmas/ctxmgmt/domains/lab308Domain/group> .
+  ?agent cashmere:memberIn <http://localhost:8080/context/domains/lab308Domain/group> .
 }
 
-FROM NAMED WINDOW <LocatedAt> ON <http://example.org/environments/upb_hmas/ctxmgmt/streams/LocatedAt> [RANGE PT5S STEP PT1S]
+FROM NAMED WINDOW <LocatedAt> ON <http://localhost:8080/context/streams/LocatedAt> [RANGE PT5S STEP PT1S]
 WHERE
 {
   WINDOW <LocatedAt> {

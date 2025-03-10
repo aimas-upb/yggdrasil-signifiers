@@ -35,10 +35,9 @@ java {
 }
 
 dependencies {
-  implementation(project(":yggdrasil-core"))
   implementation(project(":yggdrasil-utils"))
-  implementation(project(":yggdrasil-cartago"))
-  implementation(files("${rootProject.projectDir}/libs/cartago-3.2-SNAPSHOT-all.jar"))
+  // implementation(project(":yggdrasil-cartago"))
+  // implementation(files("${rootProject.projectDir}/libs/cartago-3.2-SNAPSHOT-all.jar"))
   
   implementation(libs.log4j.core)
   implementation(libs.vertx.core)

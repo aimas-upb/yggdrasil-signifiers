@@ -9,9 +9,9 @@ import org.hyperagents.yggdrasil.model.interfaces.ContextStreamModel;
 import io.vertx.core.shareddata.Shareable;
 
 public interface ContextManagementConfig extends Shareable {
-    public static final String CONTEXT_SERVICE_PATH = "context/";
-    public static final String CONTEXT_STREAMS_PATH = "context/streams/";
-    public static final String CONTEXT_DOMAINS_PATH = "context/domains/";
+    public static final String CONTEXT_SERVICE_PATH = "context";
+    public static final String CONTEXT_STREAMS_PATH = "context/streams";
+    public static final String CONTEXT_DOMAINS_PATH = "context/domains";
     public static final String STREAM_UPDATES_PATH = "context/streams/updates";
     
     /**

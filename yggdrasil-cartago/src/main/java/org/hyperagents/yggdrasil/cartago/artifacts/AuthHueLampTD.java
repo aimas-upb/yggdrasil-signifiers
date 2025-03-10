@@ -1,4 +1,4 @@
-package org.hyperagents.yggdrasil.auth.artifacts;
+package org.hyperagents.yggdrasil.cartago.artifacts;
 
 import java.util.Arrays;
 
@@ -11,12 +11,15 @@ import cartago.OPERATION;
 import cartago.OpFeedbackParam;
 import ch.unisg.ics.interactions.wot.td.schemas.ArraySchema;
 import ch.unisg.ics.interactions.wot.td.schemas.StringSchema;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 /**
- * HueLamp TD Artifact, has an on/off state that can be toggled and a color 
- * that can be set. Serves as exemplary Hypermedia Artifact, uses TD as its ontology
+ * AuthHueLampTD is a ContextAuthHypermediaTDArtifact that represents a Hue Lamp with an internal
+ * state and color. It provides operations to get the status of the lamp, toggle its state, and set
+ * its color. The artifact also defines the affordances for interacting with the lamp, as well as authorizations for
+ * accessing its affordances.
  */
-
+@SuppressFBWarnings("PI_DO_NOT_REUSE_PUBLIC_IDENTIFIERS_CLASS_NAMES")
 public class AuthHueLampTD extends ContextAuthHypermediaTDArtifact {
   
   private static final String EXAMPLE_PREFIX = "http://example.org/";

@@ -63,7 +63,7 @@ dependencies {
   implementation(project(":yggdrasil-core"))
   implementation(project(":yggdrasil-cartago"))
   implementation(project(":yggdrasil-websub"))
-  // implementation(project(":yggdrasil-context"))
+  implementation(project(":yggdrasil-context"))
 
   implementation(libs.vertx.core)
   implementation(libs.vertx.config)

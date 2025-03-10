@@ -400,22 +400,34 @@ public class HttpEntityHandler implements HttpEntityHandlerInterface {
 
     switch (subscribeRequest.getString("hub.mode").toLowerCase(Locale.ENGLISH)) {
       case "subscribe":
-        if (entityIri.matches("^https?://.*?:[0-9]+/workspaces(/)?(\\?(parent=[^&]+))?$")) {
+        // check if the entity is a context stream
+        if (entityIri.matches("^https?://.*?:[0-9]+/context/streams/.*$")) {
           this.notificationMessagebox
               .sendMessage(
                   new HttpNotificationDispatcherMessage.AddCallback(entityIri, callbackIri)
               )
               .onSuccess(r -> routingContext.response().setStatusCode(HttpStatus.SC_OK).end())
               .onFailure(t -> routingContext.fail(HttpStatus.SC_INTERNAL_SERVER_ERROR));
-        } else {
-          final var actualEntityIri =
+        }
+        else { 
+          if (entityIri.matches("^https?://.*?:[0-9]+/workspaces(/)?(\\?(parent=[^&]+))?$")) {
+          this.notificationMessagebox
+              .sendMessage(
+                  new HttpNotificationDispatcherMessage.AddCallback(entityIri, callbackIri)
+              )
+              .onSuccess(r -> routingContext.response().setStatusCode(HttpStatus.SC_OK).end())
+              .onFailure(t -> routingContext.fail(HttpStatus.SC_INTERNAL_SERVER_ERROR));
+          } 
+          else {
+            final var actualEntityIri =
               Pattern.compile("^(https?://.*?:[0-9]+/workspaces/.*?)/(?:artifacts|agents)/$")
                   .matcher(entityIri)
                   .results()
                   .map(r -> r.group(1))
                   .findFirst()
                   .orElse(entityIri);
-          this.rdfStoreMessagebox
+            
+            this.rdfStoreMessagebox
               .sendMessage(new RdfStoreMessage.GetEntity(actualEntityIri))
               .compose(r -> this.notificationMessagebox.sendMessage(
                   // TODO: why do we need this if we have the same callback again?
@@ -426,7 +438,8 @@ public class HttpEntityHandler implements HttpEntityHandlerInterface {
                   t instanceof ReplyException e && e.failureCode() == HttpStatus.SC_NOT_FOUND
                       ? HttpStatus.SC_NOT_FOUND
                       : HttpStatus.SC_INTERNAL_SERVER_ERROR
-              ));
+            ));
+          }
         }
         break;
       case "unsubscribe":

@@ -78,6 +78,8 @@ class RDFGraphGenerator:
                 }
             }
             
+            logger.info(f"Sending update {payload} to {self.config['hubURI']} at timestamp {timestamp}\n")
+
             # Send POST request
             response = requests.post(
                 self.config['hubURI'],

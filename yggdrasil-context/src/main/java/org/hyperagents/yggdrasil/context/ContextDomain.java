@@ -64,9 +64,11 @@ public class ContextDomain {
 
     /**
      * Construct a ContextDomain specification by providing the URI of the ContextAssertion, the URI of the ContextEntity, and the context management endpoint.
-     * @param contextAssertionURI: the URI of the ContextAssertion serving as ContextDimension
-     * @param contextEntityURI: the URI of the ContextEntity playing the object role in the ContextAssertion
-     * @param assertionStreamURI: the URI of the RDF stream where the updates of the ContextAssertion are published
+     *
+     * @param contextDomainURI the URI of the ContextDomain
+     * @param engineConfigURL the URI of the RSPQL query engine configuration
+     * @param membershipRuleQueryURLs the URIs of the RSPQL queries that infer the membership of ContextEntities to the ContextDomainGroup
+     * @param contextStreams the ContextStreams that are levereged in Context Domain Membership rules
      */
     public ContextDomain(String contextDomainURI, String engineConfigURL,
                         List<String> membershipRuleQueryURLs, List<ContextStream> contextStreams) {
@@ -78,6 +80,9 @@ public class ContextDomain {
         
         // set the URI of the RSPQL query that infers the membership of ContextEntities to the ContextDomainGroup
         this.membershipRuleQueryURLs = membershipRuleQueryURLs;
+        
+        // set the list of ContextStreams that are levereged in Context Domain Membership rules
+        this.contextStreams.addAll(contextStreams);
 
         // Set up the RDF store for the named graphs denoting the ContextDomainGroup memberships
         // We set it up as a SailRepository over an in-memory store, as we do not need to persist the membership information for the time being.

@@ -18,7 +18,7 @@
     "known-artifacts" : [
       {
         "class" : "http://example.org/HueLamp",
-        "template" : "org.hyperagents.yggdrasil.auth.artifacts.AuthHueLampTD"
+        "template" : "org.hyperagents.yggdrasil.cartago.artifacts.AuthHueLampTD"
       }
     ],
     "workspaces" : [

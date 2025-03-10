@@ -1,4 +1,4 @@
-package org.hyperagents.yggdrasil.auth.artifacts;
+package org.hyperagents.yggdrasil.cartago.artifacts;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -13,11 +13,10 @@ import org.hyperagents.yggdrasil.auth.model.AuthorizationAccessType;
 import org.hyperagents.yggdrasil.auth.model.AuthorizedEntityType;
 import org.hyperagents.yggdrasil.auth.model.CASHMERE;
 import org.hyperagents.yggdrasil.auth.model.ContextBasedAuthorization;
-import org.hyperagents.yggdrasil.cartago.artifacts.HypermediaTDArtifact;
+import org.hyperagents.yggdrasil.model.interfaces.Environment;
 
 import cartago.CartagoException;
 import io.vertx.core.Vertx;
-import jason.environment.Environment;
 
 
 public abstract class ContextAuthHypermediaTDArtifact extends HypermediaTDArtifact {

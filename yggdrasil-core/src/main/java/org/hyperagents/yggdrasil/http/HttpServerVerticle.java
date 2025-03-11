@@ -201,7 +201,7 @@ public class HttpServerVerticle extends AbstractVerticle {
       actionRoute.disable();
     }
 
-    final var notificationRoute = router.post("/hub/").handler(handler::handleEntitySubscription);
+    final var notificationRoute = router.post("/hub/").handler(handler::handleWebSub);
     if (!this.notificationConfig.isEnabled()) {
       notificationRoute.disable();
     }

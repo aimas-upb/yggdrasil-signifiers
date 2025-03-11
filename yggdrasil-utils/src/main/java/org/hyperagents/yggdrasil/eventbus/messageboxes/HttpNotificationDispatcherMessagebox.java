@@ -1,16 +1,18 @@
 package org.hyperagents.yggdrasil.eventbus.messageboxes;
 
-import io.vertx.core.Future;
-import io.vertx.core.Promise;
-import io.vertx.core.eventbus.EventBus;
-import io.vertx.core.eventbus.Message;
 import java.util.function.Consumer;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.hyperagents.yggdrasil.eventbus.codecs.GenericMessageCodec;
 import org.hyperagents.yggdrasil.eventbus.codecs.HttpNotificationDispatcherMessageMarshaller;
 import org.hyperagents.yggdrasil.eventbus.messages.HttpNotificationDispatcherMessage;
 import org.hyperagents.yggdrasil.utils.WebSubConfig;
+
+import io.vertx.core.Future;
+import io.vertx.core.Promise;
+import io.vertx.core.eventbus.EventBus;
+import io.vertx.core.eventbus.Message;
 
 /**
  * This class represents a messagebox for handling HTTP notification dispatcher messages.
@@ -92,6 +94,13 @@ public class HttpNotificationDispatcherMessagebox
           HttpNotificationDispatcherMessage.RemoveCallback.class,
           new GenericMessageCodec<>(
             HttpNotificationDispatcherMessage.RemoveCallback.class,
+            new HttpNotificationDispatcherMessageMarshaller()
+          )
+      );
+      this.eventBus.registerDefaultCodec(
+          HttpNotificationDispatcherMessage.UpdateStream.class,
+          new GenericMessageCodec<>(
+            HttpNotificationDispatcherMessage.UpdateStream.class,
             new HttpNotificationDispatcherMessageMarshaller()
           )
       );

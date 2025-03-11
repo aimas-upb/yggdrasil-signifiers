@@ -470,35 +470,49 @@ public class HttpEntityHandler implements HttpEntityHandlerInterface {
             final var entityIri = requestBody.getString("hub.topic");
             final var callbackIri = requestBody.getString("hub.callback");
             
-            if (entityIri.matches("^https?://.*?:[0-9]+/workspaces(/)?(\\?(parent=[^&]+))?$")) {
-                this.notificationMessagebox
-                    .sendMessage(
-                        new HttpNotificationDispatcherMessage.AddCallback(entityIri, callbackIri)
-                    )
-                    .onSuccess(r -> routingContext.response().setStatusCode(HttpStatus.SC_OK).end())
-                    .onFailure(t -> routingContext.fail(HttpStatus.SC_INTERNAL_SERVER_ERROR));
-            } else {
+            // check if the entity is a context stream
+            if (entityIri.matches("^https?://.*?:[0-9]+/context/streams/.*$")) {
+              this.notificationMessagebox
+                  .sendMessage(
+                      new HttpNotificationDispatcherMessage.AddCallback(entityIri, callbackIri)
+                  )
+                  .onSuccess(r -> routingContext.response().setStatusCode(HttpStatus.SC_OK).end())
+                  .onFailure(t -> routingContext.fail(HttpStatus.SC_INTERNAL_SERVER_ERROR));
+            }
+            else { 
+              if (entityIri.matches("^https?://.*?:[0-9]+/workspaces(/)?(\\?(parent=[^&]+))?$")) {
+              this.notificationMessagebox
+                  .sendMessage(
+                      new HttpNotificationDispatcherMessage.AddCallback(entityIri, callbackIri)
+                  )
+                  .onSuccess(r -> routingContext.response().setStatusCode(HttpStatus.SC_OK).end())
+                  .onFailure(t -> routingContext.fail(HttpStatus.SC_INTERNAL_SERVER_ERROR));
+              } 
+              else {
                 final var actualEntityIri =
-                    Pattern.compile("^(https?://.*?:[0-9]+/workspaces/.*?)/(?:artifacts|agents)/$")
-                        .matcher(entityIri)
-                        .results()
-                        .map(r -> r.group(1))
-                        .findFirst()
-                        .orElse(entityIri);
+                  Pattern.compile("^(https?://.*?:[0-9]+/workspaces/.*?)/(?:artifacts|agents)/$")
+                      .matcher(entityIri)
+                      .results()
+                      .map(r -> r.group(1))
+                      .findFirst()
+                      .orElse(entityIri);
                 
                 this.rdfStoreMessagebox
-                    .sendMessage(new RdfStoreMessage.GetEntity(actualEntityIri))
-                    .compose(r -> this.notificationMessagebox.sendMessage(
-                        new HttpNotificationDispatcherMessage.AddCallback(entityIri, callbackIri)
-                    ))
-                    .onSuccess(r -> routingContext.response().setStatusCode(HttpStatus.SC_OK).end())
-                    .onFailure(t -> routingContext.fail(
-                        t instanceof ReplyException e && e.failureCode() == HttpStatus.SC_NOT_FOUND
-                            ? HttpStatus.SC_NOT_FOUND
-                            : HttpStatus.SC_INTERNAL_SERVER_ERROR
-                    ));
+                  .sendMessage(new RdfStoreMessage.GetEntity(actualEntityIri))
+                  .compose(r -> this.notificationMessagebox.sendMessage(
+                      // TODO: why do we need this if we have the same callback again?
+                      new HttpNotificationDispatcherMessage.AddCallback(entityIri, callbackIri)
+                  ))
+                  .onSuccess(r -> routingContext.response().setStatusCode(HttpStatus.SC_OK).end())
+                  .onFailure(t -> routingContext.fail(
+                      t instanceof ReplyException e && e.failureCode() == HttpStatus.SC_NOT_FOUND
+                          ? HttpStatus.SC_NOT_FOUND
+                          : HttpStatus.SC_INTERNAL_SERVER_ERROR
+                ));
+              }
             }
             break;
+            
         }
         case "unsubscribe": {
             final var entityIri = requestBody.getString("hub.topic");
@@ -514,7 +528,7 @@ public class HttpEntityHandler implements HttpEntityHandlerInterface {
         }
         case "update_stream": {
             final var url = requestBody.getString("hub.url");
-            final var payload = requestBody.getString("hub.payload");
+            final var payload = requestBody.getJsonObject("hub.payload").encode();
             
             this.notificationMessagebox
                 .sendMessage(new HttpNotificationDispatcherMessage.UpdateStream(url, payload))

@@ -31,6 +31,8 @@ public interface HttpEntityHandlerInterface {
 
   void handleEntitySubscription(final RoutingContext routingContext);
 
+  void handleWebSub(final RoutingContext routingContext);
+
   void handleJoinWorkspace(final RoutingContext routingContext);
 
   void handleLeaveWorkspace(final RoutingContext routingContext);

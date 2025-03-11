@@ -112,16 +112,15 @@ public class ContextMgmtHandler {
             
             // Check that the update payload is present
             final var requestBody = routingContext.body().asJsonObject();
-            if (!requestBody.containsKey("hub.payload")) {
-                LOGGER.warn("Missing payload in WebSub notification for stream: " + streamUri);
+            if (!requestBody.containsKey("graph_serialized") || !requestBody.containsKey("timestamp_ms")) {
+                LOGGER.warn("Missing graph payload or update timestamp in WebSub notification for stream update: " + streamUri);
                 routingContext.response().setStatusCode(400).end("Missing payload");
                 return;
             }
 
             // Check that the payload contains the graph and timestamp
-            JsonObject payloadObj = requestBody.getJsonObject("hub.payload");
-            String graphSerialized = payloadObj.getString("graph_serialized");
-            long timestampMs = payloadObj.getLong("timestamp_ms", Long.valueOf(0));
+            String graphSerialized = requestBody.getString("graph_serialized");
+            long timestampMs = requestBody.getLong("timestamp_ms", Long.valueOf(0));
             
             if (graphSerialized == null || graphSerialized.isEmpty()) {
                 LOGGER.warn("Received empty graph in payload for stream: " + streamUri);

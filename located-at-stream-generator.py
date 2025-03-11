@@ -80,10 +80,10 @@ class RDFGraphGenerator:
             
             logger.info(f"Sending update {payload} to {self.config['hubURI']} at timestamp {timestamp}\n")
 
-            # Send POST request
+            # Send POST request with JSON body
             response = requests.post(
                 self.config['hubURI'],
-                data=payload
+                json=payload
             )
             
             # Log the result

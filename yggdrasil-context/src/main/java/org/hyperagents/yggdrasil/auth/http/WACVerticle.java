@@ -3,8 +3,6 @@ package org.hyperagents.yggdrasil.auth.http;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.MalformedURLException;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.List;
 
@@ -104,10 +102,11 @@ public class WACVerticle extends AbstractVerticle {
         environment.getWorkspaces().forEach(
             workspace -> workspace.getArtifacts().forEach(
                 artifact -> {
-                    if (artifact.getContextAccessPolicyURL().isPresent()) {
+                    if (artifact.getRepresentation().isPresent()) {
                         try {
-                            // read the authorization policy from the URL into an jena RDF model
-                            URL url = new URI(artifact.getContextAccessPolicyURL().get()).toURL();
+                            // read the authorization specification from the RDF representation file path, if it exists
+                            var representationPath = artifact.getRepresentation().get();
+                            URL url = representationPath.toUri().toURL();
                             try (InputStream inputStream = url.openStream()) {
                                 Model contextAuthModel = Rio.parse(inputStream, "", RDFFormat.TURTLE);
                                 
@@ -120,7 +119,7 @@ public class WACVerticle extends AbstractVerticle {
                             } catch (Exception e) {
                                 LOGGER.error("Failed to read RDF model from URL: " + url, e);
                             }
-                        } catch (URISyntaxException | MalformedURLException ex) {
+                        } catch (MalformedURLException ex) {
                             LOGGER.error("Invalid URI syntax for the artifact access policy URL: " + artifact.getContextAccessPolicyURL().get(), ex);
                         }
                     }
@@ -167,7 +166,7 @@ public class WACVerticle extends AbstractVerticle {
             LOGGER.info("Resource " + resourceURI + " is public. Returning 404 response.");
             
             // create a JSON payload for the not found message
-            message.fail(HttpStatus.SC_NOT_FOUND, new JsonObject().put("error", "Resource"+ resourceURI + " has no WAC policy").encode());
+            message.fail(HttpStatus.SC_NOT_FOUND, new JsonObject().put("error", "Resource "+ resourceURI + " has no WAC policy").encode());
         }
         else {
             List<ContextBasedAuthorization> auths = authorizationRegistry.getContextAuthorisations(resourceURI);
@@ -207,14 +206,14 @@ public class WACVerticle extends AbstractVerticle {
         // Use the authorization registry to check if the authorization exists; if there isn't an authorization, return by default an OK response,
         // because it means that the resource is public
         AuthorizationRegistry authorizationRegistry = AuthorizationRegistry.getInstance();
-        if (!authorizationRegistry.hasAccessAuthorization(agentURI, accessType)) {
+        if (!authorizationRegistry.hasAccessAuthorization(accessedResourceUri, accessType)) {
             LOGGER.info("Authorization not found for agent " + agentURI + " to access resource " + accessedResourceUri + " in mode " + accessType + ". Resource is public.");   
             message.reply(true);
             return;
         }
         
         // forward a call to the Context Management Verticle to validate the authorization
-        contextMessageBox.sendMessage(new ContextMessage.ValidateContextBasecAccess(agentURI, accessedResourceUri))
+        contextMessageBox.sendMessage(new ContextMessage.ValidateContextBasedAccess(agentURI, accessedResourceUri))
             .onSuccess(r -> {
                 LOGGER.info("Authorization validated for agent " + agentURI + " to access resource " + accessedResourceUri + " in mode " + accessType);
                 message.reply(true);

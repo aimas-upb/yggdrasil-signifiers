@@ -1,5 +1,26 @@
 package org.hyperagents.yggdrasil.cartago.artifacts;
 
+import java.net.URI;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
+import org.eclipse.rdf4j.model.Model;
+import org.eclipse.rdf4j.model.impl.LinkedHashModel;
+import org.hyperagents.yggdrasil.cartago.CartagoDataBundle;
+import org.hyperagents.yggdrasil.utils.HttpInterfaceConfig;
+import org.hyperagents.yggdrasil.utils.RepresentationFactory;
+import org.hyperagents.yggdrasil.utils.WebSubConfig;
+import org.hyperagents.yggdrasil.utils.impl.HttpInterfaceConfigImpl;
+import org.hyperagents.yggdrasil.utils.impl.RepresentationFactoryTDImplt;
+
+import com.google.common.collect.ListMultimap;
+import com.google.common.collect.Multimaps;
+import com.google.gson.JsonParser;
+
 import cartago.Artifact;
 import cartago.ArtifactId;
 import cartago.CartagoException;
@@ -10,26 +31,8 @@ import ch.unisg.ics.interactions.wot.td.io.TDGraphReader;
 import ch.unisg.ics.interactions.wot.td.schemas.ArraySchema;
 import ch.unisg.ics.interactions.wot.td.schemas.DataSchema;
 import ch.unisg.ics.interactions.wot.td.security.SecurityScheme;
-import com.google.common.collect.ListMultimap;
-import com.google.common.collect.Multimaps;
-import com.google.gson.JsonParser;
 import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonObject;
-import java.net.URI;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.stream.Collectors;
-import org.eclipse.rdf4j.model.Model;
-import org.eclipse.rdf4j.model.impl.LinkedHashModel;
-import org.hyperagents.yggdrasil.cartago.CartagoDataBundle;
-import org.hyperagents.yggdrasil.utils.HttpInterfaceConfig;
-import org.hyperagents.yggdrasil.utils.RepresentationFactory;
-import org.hyperagents.yggdrasil.utils.WebSubConfig;
-import org.hyperagents.yggdrasil.utils.impl.HttpInterfaceConfigImpl;
-import org.hyperagents.yggdrasil.utils.impl.RepresentationFactoryTDImplt;
 
 /**
  * Abstract Class that implements common functionality of all HypermediaTDArtifacts.
@@ -146,6 +149,13 @@ public abstract class HypermediaTDArtifact extends Artifact implements Hypermedi
   }
 
   protected final String getArtifactUri() {
+    return this.httpConfig.getArtifactUri(
+        this.getId().getWorkspaceId().getName(),
+        this.getId().getName()
+    );
+  }
+
+  protected final String getArtifactUriTrailingSlash() {
     return this.httpConfig.getArtifactUriTrailingSlash(
         this.getId().getWorkspaceId().getName(),
         this.getId().getName()
@@ -192,7 +202,7 @@ public abstract class HypermediaTDArtifact extends Artifact implements Hypermedi
         new ActionAffordance
             .Builder(
             actionName,
-            new Form.Builder(this.getArtifactUri() + relativeUri)
+            new Form.Builder(this.getArtifactUriTrailingSlash() + relativeUri)
                 .setMethodName(methodName)
                 .build()
         )

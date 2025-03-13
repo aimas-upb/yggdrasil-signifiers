@@ -1,6 +1,28 @@
 package org.hyperagents.yggdrasil.cartago.artifacts;
 
+import java.net.URI;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
+import org.eclipse.rdf4j.model.Model;
+import org.eclipse.rdf4j.model.impl.LinkedHashModel;
+import org.hyperagents.yggdrasil.cartago.CartagoDataBundle;
+import org.hyperagents.yggdrasil.utils.HttpInterfaceConfig;
 import static org.hyperagents.yggdrasil.utils.JsonObjectUtils.parseInput;
+import org.hyperagents.yggdrasil.utils.RepresentationFactory;
+import org.hyperagents.yggdrasil.utils.WebSubConfig;
+import org.hyperagents.yggdrasil.utils.impl.HttpInterfaceConfigImpl;
+import org.hyperagents.yggdrasil.utils.impl.RepresentationFactoryHMASImpl;
+
+import com.google.common.collect.ListMultimap;
+import com.google.common.collect.Multimaps;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParser;
 
 import cartago.Artifact;
 import cartago.ArtifactId;
@@ -11,28 +33,8 @@ import ch.unisg.ics.interactions.hmas.interaction.shapes.ListSpecification;
 import ch.unisg.ics.interactions.hmas.interaction.signifiers.ActionSpecification;
 import ch.unisg.ics.interactions.hmas.interaction.signifiers.Form;
 import ch.unisg.ics.interactions.hmas.interaction.signifiers.Signifier;
-import com.google.common.collect.ListMultimap;
-import com.google.common.collect.Multimaps;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonParser;
 import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonObject;
-import java.net.URI;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.stream.Collectors;
-import org.eclipse.rdf4j.model.Model;
-import org.eclipse.rdf4j.model.impl.LinkedHashModel;
-import org.hyperagents.yggdrasil.cartago.CartagoDataBundle;
-import org.hyperagents.yggdrasil.utils.HttpInterfaceConfig;
-import org.hyperagents.yggdrasil.utils.RepresentationFactory;
-import org.hyperagents.yggdrasil.utils.WebSubConfig;
-import org.hyperagents.yggdrasil.utils.impl.HttpInterfaceConfigImpl;
-import org.hyperagents.yggdrasil.utils.impl.RepresentationFactoryHMASImpl;
 
 /**
  * Abstract Class that implements common functionality of all HypermediaHMASArtifacts.
@@ -163,7 +165,7 @@ public abstract class HypermediaHMASArtifact extends Artifact implements Hyperme
     this.registerInteractionAffordances();
   }
 
-  protected final String getArtifactUri() {
+  protected final String getArtifactUriTrailingSlash() {
     return this.httpConfig.getArtifactUriTrailingSlash(
         this.getId().getWorkspaceId().getName(),
         this.getId().getName()
@@ -209,8 +211,8 @@ public abstract class HypermediaHMASArtifact extends Artifact implements Hyperme
 
     // TODO: set content type dynamically
     // TODO: set input correctly
-    final var form = new Form.Builder(this.getArtifactUri() + relativeUri)
-        .setIRIAsString(this.getArtifactUri() + "#" + actionName)
+    final var form = new Form.Builder(this.getArtifactUriTrailingSlash() + relativeUri)
+        .setIRIAsString(this.getArtifactUriTrailingSlash() + "#" + actionName)
         .setMethodName(methodName)
         .setContentType("application/json")
         .build();
@@ -227,7 +229,7 @@ public abstract class HypermediaHMASArtifact extends Artifact implements Hyperme
     }
 
     final var signifier = new Signifier.Builder(actionSpecification.build())
-        .setIRIAsString(this.getArtifactUri() + "#" + actionName + "-Signifier")
+        .setIRIAsString(this.getArtifactUriTrailingSlash() + "#" + actionName + "-Signifier")
         .build();
 
     this.registerSignifier(

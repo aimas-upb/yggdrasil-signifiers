@@ -285,8 +285,7 @@ public class ContextMgmtVerticle extends AbstractVerticle {
             for (var artifact : wsp.getArtifacts()) {
                 if (artifact.getContextAccessPolicyURL().isPresent()) {
                     // form the URL path that will correspond at runtime to this artifact
-                    String artifactPath = "/workspaces/" + wsp.getName() + "/artifacts/" + artifact.getName() + "#artifact";
-                    String artifactURL = httpConfig.getBaseUri() + artifactPath;
+                    String artifactURL = httpConfig.getArtifactUri(wsp.getName(), artifact.getName()) + "#artifact";
                     artifactPolicies.put(artifactURL, artifact.getContextAccessPolicyURL().get());
 
                     // Dereference the policy URI as a file and add the contents to the contextAccessConditionsRepo.
@@ -327,7 +326,7 @@ public class ContextMgmtVerticle extends AbstractVerticle {
                 
                 try {
                     switch (message.body()) {
-                        case ContextMessage.ValidateContextBasecAccess msgContent -> {
+                        case ContextMessage.ValidateContextBasedAccess msgContent -> {
                             LOGGER.info("Handling Context-based access validation action...");
                             validateContextBasedAccess(msgContent.accessRequesterURI(), msgContent.accessedResourceURI(), message);
                         }
@@ -475,7 +474,7 @@ public class ContextMgmtVerticle extends AbstractVerticle {
                 conn.add(customAccessConditions, RDF4J.SHACL_SHAPE_GRAPH);
                 
                 // for debug: serialize the contents of the validationRepo into a temporary turtle file
-                File tempValidationRepoFile = new File("/home/alex/OneDrive/AI-MAS/projects/2022-CASHMERE/dev/yggdrasil-cashmere/src/test/resources/validationRepo.ttl");
+                File tempValidationRepoFile = new File("/home/alex/OneDrive/AI-MAS/projects/2022-CASHMERE/dev/yggdrasil/src/test/resources/validationRepo.ttl");
                 Utils.serializeRepoConnection(conn, tempValidationRepoFile, RDF4J.SHACL_SHAPE_GRAPH);
                 
                 // conn.commit();
@@ -488,7 +487,7 @@ public class ContextMgmtVerticle extends AbstractVerticle {
                 conn.commit();
 
                 // for debug: serialize the contents of the validationRepo into a temporary turtle file
-                File tempDataRepoFile = new File("/home/alex/OneDrive/AI-MAS/projects/2022-CASHMERE/dev/yggdrasil-cashmere/src/test/resources/dataRepo.ttl");
+                File tempDataRepoFile = new File("/home/alex/OneDrive/AI-MAS/projects/2022-CASHMERE/dev/yggdrasil/src/test/resources/dataRepo.ttl");
                 Utils.serializeRepoConnection(conn, tempDataRepoFile);
 
                 LOGGER.info("Access to artifact " + accessedResourceURI + " allowed for access requester: " 

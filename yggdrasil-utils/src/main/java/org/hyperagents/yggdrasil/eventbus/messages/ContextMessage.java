@@ -19,7 +19,7 @@ public sealed interface ContextMessage {
      * @param accessRequesterURI The URI of the entity that requests the access to the accessedResource.
      * @param accessedResourceURI The URI of the entity that is requested to be accessed.
      */
-    record ValidateContextBasecAccess(String accessRequesterURI, String accessedResourceURI) implements ContextMessage {
+    record ValidateContextBasedAccess(String accessRequesterURI, String accessedResourceURI) implements ContextMessage {
     }
 
     /**

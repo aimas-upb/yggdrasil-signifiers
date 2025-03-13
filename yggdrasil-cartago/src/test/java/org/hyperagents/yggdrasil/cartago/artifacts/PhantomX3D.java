@@ -120,7 +120,7 @@ public class PhantomX3D extends HypermediaTDArtifact {
     final var rdf = SimpleValueFactory.getInstance();
 
     final var coordinates = rdf.createBNode();
-    builder.add(getArtifactUri(), rdf.createIRI(PREFIX + "hasOriginCoordinates"), coordinates);
+    builder.add(getArtifactUriTrailingSlash(), rdf.createIRI(PREFIX + "hasOriginCoordinates"), coordinates);
     builder.add(coordinates, rdf.createIRI(PREFIX + "coordX"), rdf.createLiteral(2.7));
     builder.add(coordinates, rdf.createIRI(PREFIX + "coordY"), rdf.createLiteral(-0.5));
     builder.add(coordinates, rdf.createIRI(PREFIX + "coordZ"), rdf.createLiteral(0.8));

@@ -91,7 +91,7 @@ public class AuthHueLampTD extends ContextAuthHypermediaTDArtifact {
     // First, create the read and write SharedContextAccessAuthorisation object
 
     // The URI for the ContextDomainGroup 
-    ContextBasedAuthorization accessAuth = new ContextBasedAuthorization(getArtifactUri(), 
+    ContextBasedAuthorization accessAuth = new ContextBasedAuthorization(getArtifactUri() + HASH_ARTIFACT, 
             Arrays.asList(AuthorizationAccessType.READ, AuthorizationAccessType.WRITE), AuthorizedEntityType.AGENT,
             CASHMERE.accessRequester.stringValue(),
             EXAMPLE_PREFIX + "light308AccessCondition");

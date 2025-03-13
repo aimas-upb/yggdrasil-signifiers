@@ -29,14 +29,14 @@
           {
             "name" : "light308",
             "class" : "http://example.org/HueLamp",
-            "representation": "yggdrasil-context/src/test/resources/td/light308_auth_artifact_td.ttl",
             "init-params" : [
               "off",
               "blue"
             ],
             "focused-by" : ["alex_agent"],
+            "representation": "/home/alex/OneDrive/AI-MAS/projects/2022-CASHMERE/dev/yggdrasil/yggdrasil-context/src/test/resources/td/light308_auth_artifact_td.ttl",
             "access-policy-url": 
-              "file:///home/alex/OneDrive/AI-MAS/projects/2022-CASHMERE/dev/yggdrasil/yggdrasil-context/src/test/resources/td/light308_auth_artifact_td.ttl"
+              "file:///home/alex/OneDrive/AI-MAS/projects/2022-CASHMERE/dev/yggdrasil/yggdrasil-context/src/test/resources/context/upb-hmas-context-access-condition-shapes.ttl"
           }
         ],
         "joined-by" : ["alex_agent"]

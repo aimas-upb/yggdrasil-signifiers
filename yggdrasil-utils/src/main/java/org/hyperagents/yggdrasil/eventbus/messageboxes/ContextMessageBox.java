@@ -37,8 +37,8 @@ public class ContextMessageBox implements Messagebox<ContextMessage> {
                 new GenericMessageCodec<>(ContextMessage.GetProfiledContext.class, new ContextManagementMessageMarshaller())
             );
             this.eventBus.registerDefaultCodec(
-                ContextMessage.ValidateContextBasecAccess.class,
-                new GenericMessageCodec<>(ContextMessage.ValidateContextBasecAccess.class, new ContextManagementMessageMarshaller())
+                ContextMessage.ValidateContextBasedAccess.class,
+                new GenericMessageCodec<>(ContextMessage.ValidateContextBasedAccess.class, new ContextManagementMessageMarshaller())
             );
             this.eventBus.registerDefaultCodec(ContextMessage.ContextStreamUpdate.class, 
                 new GenericMessageCodec<>(ContextMessage.ContextStreamUpdate.class, new ContextManagementMessageMarshaller()));

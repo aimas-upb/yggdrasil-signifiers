@@ -4,13 +4,14 @@
 @prefix dct: <http://purl.org/dc/terms/> .
 @prefix wotsec: <https://www.w3.org/2019/wot/security#> .
 @prefix js: <https://www.w3.org/2019/wot/json-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 @prefix acl: <http://www.w3.org/ns/auth/acl#> .
 @prefix hmas: <https://purl.org/hmas/> .
 @prefix cashmere: <https://aimas.cs.pub.ro/ont/cashmere#> .
 @prefix ex: <http://example.org/> .
 
 
-<http://localhost:8080/workspaces/lab308/artifacts/light308/#artifact> a td:Thing, cashmere:ContextAuthorizedResource, hmas:Artifact, ex:HueLamp ;
+<http://localhost:8080/workspaces/lab308/artifacts/light308#artifact> a td:Thing, cashmere:ContextAuthorizedResource, hmas:Artifact, ex:HueLamp ;
     td:title "Hue Lamp with Context-Based Authorization" ;
     td:hasSecurityConfiguration [ a wotsec:NoSecurityScheme ] ;
     td:hasPropertyAffordance [
@@ -35,7 +36,7 @@
                 js:oneOf ([js:const "red"]  [js:const "green"]  [js:const "blue"]);
             ] ;
             js:required ("state" "color") ;
-            js:additionalProperties false .
+            js:additionalProperties "false"^^xsd:boolean ;
         ] ;
     ] ;
     td:hasActionAffordance [
@@ -70,7 +71,7 @@
     # Shared Context Authorization
     cashmere:hasAccessAuthorization [
         a cashmere:ContextBasedAuthorization ;
-        acl:accessTo <http://localhost:8080/workspaces/lab308/artifacts/light308/#artifact> ;
+        acl:accessTo <http://localhost:8080/workspaces/lab308/artifacts/light308#artifact> ;
         acl:mode acl:Read, acl:Write ;
         cashmere:hasAccessCondition ex:light308AccessCondition ;
     ] .

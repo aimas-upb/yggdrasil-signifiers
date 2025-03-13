@@ -9,7 +9,7 @@ ex:WorksAt rdfs:subclassOf consert:BinaryContextAssertion .
 
 _:b1  a ex:WorksAt ;
       consert:assertionAcquisitionType consert:Profiled ;
-      consert:assertionSubject ex:alexAgent ;
+      consert:assertionSubject <http://localhost:8080/agents/alex> ;
       consert:assertionObject ex:upb ;
       ann:hasAnnotation _:b2 .
 

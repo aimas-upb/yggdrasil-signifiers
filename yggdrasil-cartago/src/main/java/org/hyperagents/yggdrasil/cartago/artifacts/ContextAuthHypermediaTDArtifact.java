@@ -20,7 +20,7 @@ import io.vertx.core.Vertx;
 
 
 public abstract class ContextAuthHypermediaTDArtifact extends HypermediaTDArtifact {
-    private static final String HASH_ARTIFACT = "#artifact";
+    protected static final String HASH_ARTIFACT = "#artifact";
 
     private final Environment hmasEnvironment = Vertx.currentContext().owner().sharedData()
             .<String, Environment>getLocalMap("environment").get("default");

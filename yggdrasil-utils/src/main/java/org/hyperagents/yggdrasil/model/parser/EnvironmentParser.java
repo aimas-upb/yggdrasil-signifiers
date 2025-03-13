@@ -267,7 +267,7 @@ public final class EnvironmentParser {
                       JsonObjectUtils.getJsonArray(ar, "focused-by", LOGGER::error)
                         .stream().flatMap(a -> IntStream.range(0, a.size()).mapToObj(a::getValue))
                         .map(a -> (String) a).toList(),
-                      JsonObjectUtils.getString(ar, "context-access-policy-url", LOGGER::error).orElse(null)
+                      JsonObjectUtils.getString(ar, "access-policy-url", LOGGER::error).orElse(null)
                     ));
                   }
 
@@ -284,7 +284,7 @@ public final class EnvironmentParser {
                     JsonObjectUtils.getJsonArray(ar, "focused-by", LOGGER::error)
                       .stream().flatMap(a -> IntStream.range(0, a.size()).mapToObj(a::getValue))
                       .map(a -> (String) a).toList(),
-                    JsonObjectUtils.getString(ar, "context-access-policy-url", LOGGER::error).orElse(null)
+                    JsonObjectUtils.getString(ar, "access-policy-url", LOGGER::error).orElse(null)
                   ));
                 })
                 .collect(Collectors.toSet()),

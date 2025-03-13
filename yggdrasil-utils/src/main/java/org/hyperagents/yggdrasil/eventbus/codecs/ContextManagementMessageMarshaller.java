@@ -28,7 +28,7 @@ public class ContextManagementMessageMarshaller
                             () -> new JsonParseException("The request method is not valid")
                         )
         ) {
-            case VALIDATE_CONTEXT_BASED_ACCESS -> new ContextMessage.ValidateContextBasecAccess(
+            case VALIDATE_CONTEXT_BASED_ACCESS -> new ContextMessage.ValidateContextBasedAccess(
                 jsonObject.get(MessageFields.ACCESS_REQUESTER_URI.getName()).getAsString(),
                 jsonObject.get(MessageFields.ACCESSED_RESOURCE_URI.getName()).getAsString()
             );
@@ -52,7 +52,7 @@ public class ContextManagementMessageMarshaller
     public JsonElement serialize(ContextMessage contextMsg, Type type, JsonSerializationContext jsonContext) {
         final var jsonObject = new JsonObject();
         switch(contextMsg) {
-            case ContextMessage.ValidateContextBasecAccess validateContextBasecAccess -> {
+            case ContextMessage.ValidateContextBasedAccess validateContextBasecAccess -> {
                 jsonObject.addProperty(MessageFields.REQUEST_METHOD.getName(), MessageRequestMethods.VALIDATE_CONTEXT_BASED_ACCESS.getName());
                 jsonObject.addProperty(MessageFields.ACCESS_REQUESTER_URI.getName(), validateContextBasecAccess.accessRequesterURI());
                 jsonObject.addProperty(MessageFields.ACCESSED_RESOURCE_URI.getName(), validateContextBasecAccess.accessedResourceURI());

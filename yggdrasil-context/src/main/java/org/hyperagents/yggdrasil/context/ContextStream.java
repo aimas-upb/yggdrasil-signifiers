@@ -9,6 +9,8 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.apache.jena.graph.Graph;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.hyperagents.yggdrasil.utils.RepresentationFactory;
+import org.hyperagents.yggdrasil.utils.impl.RepresentationFactoryTDImplt;
 import org.streamreasoning.rsp4j.api.stream.data.DataStream;
 import org.streamreasoning.rsp4j.io.DataStreamImpl;
 
@@ -33,6 +35,16 @@ public class ContextStream {
      * The URIs of the ContextAssertions that are part of this stream.
      */
     private final List<String> contextAssertionTypes = new ArrayList<>();
+    private RepresentationFactoryTDImplt representationFactory =
+            new RepresentationFactoryTDImplt(null, null);
+
+    public final String getHypermediaRepresentation() {
+        return this.representationFactory.createContextStreamRepresentation(
+                this.streamName,
+                this.streamURI,
+                this.contextAssertionTypes
+        );
+    }
 
     public ContextStream(String streamURI, String ontologyURL, List<String> contextAssertionTypes) {
         

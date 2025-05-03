@@ -3,6 +3,7 @@ package org.hyperagents.yggdrasil.utils.impl;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Set;
 
 import org.eclipse.rdf4j.model.Model;
@@ -174,6 +175,23 @@ public class RepresentationFactoryTDImplt implements RepresentationFactory {
     );
   }
 
+  public String createContextStreamRepresentation( 
+    final String streamName,
+    final String streamURI,
+    final List<String> contextAssertions
+    ) {
+    final var td = new ThingDescription.Builder(streamName)
+      .addThingURI(streamURI)
+      .addSemanticType(HMAS + "ContextStream")
+      .addSemanticType(HMAS + "ContextStream" + streamName);
+
+    for (String contextAssertion : contextAssertions) {
+      td.addSemanticType(contextAssertion);
+    }
+    
+    return serializeThingDescription(td);
+  }
+
   @Override
   public String createWorkspaceRepresentation(
       final String workspaceName,
@@ -275,7 +293,6 @@ public class RepresentationFactoryTDImplt implements RepresentationFactory {
         isCartagoArtifact
     );
   }
-
 
   @Override
   public String createArtifactRepresentation(

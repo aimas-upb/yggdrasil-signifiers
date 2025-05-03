@@ -487,8 +487,8 @@ public class ContextMgmtVerticle extends AbstractVerticle {
                 conn.commit();
 
                 // for debug: serialize the contents of the validationRepo into a temporary turtle file
-                File tempDataRepoFile = new File("/home/alex/OneDrive/AI-MAS/projects/2022-CASHMERE/dev/yggdrasil/src/test/resources/dataRepo.ttl");
-                Utils.serializeRepoConnection(conn, tempDataRepoFile);
+                // File tempDataRepoFile = new File("/home/alex/OneDrive/AI-MAS/projects/2022-CASHMERE/dev/yggdrasil/src/test/resources/dataRepo.ttl");
+                // Utils.serializeRepoConnection(conn, tempDataRepoFile);
 
                 LOGGER.info("Access to artifact " + accessedResourceURI + " allowed for access requester: " 
                         + accessRequesterURI + ". Reason: Context validation successful.");

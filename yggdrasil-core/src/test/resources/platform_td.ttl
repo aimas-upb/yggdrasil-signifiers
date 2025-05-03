@@ -10,8 +10,7 @@
 
 <#platform> a td:Thing, hmas:HypermediaMASPlatform;
   td:title "Yggdrasil Node";
-  td:hasSecurityConfiguration [ a wotsec:NoSecurityScheme
-    ];
+  td:hasSecurityConfiguration [ a wotsec:NoSecurityScheme ];
   td:hasActionAffordance [ a td:ActionAffordance, jacamo:createWorkspace;
       td:name "createWorkspace";
       td:hasForm [

@@ -57,4 +57,12 @@ public sealed interface ContextMessage {
      */
     record VerifyContextStreamSubscription(String streamURI) implements ContextMessage {
     }
+
+    /**
+     * A record representing a request to get the Context Domain representation of a given Context Domain URI.
+     * <p> The contextDomainURI is the URI of the Context Domain for which the representation is requested.
+     * @param contextDomainURI The URI of the Context Domain for which the representation is requested.
+     */
+    record ContextDomainRepresentation(String contextDomainURI) implements ContextMessage {
+    }
 }

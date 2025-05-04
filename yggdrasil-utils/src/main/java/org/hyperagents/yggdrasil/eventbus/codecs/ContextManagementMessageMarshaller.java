@@ -52,6 +52,9 @@ public class ContextManagementMessageMarshaller
     public JsonElement serialize(ContextMessage contextMsg, Type type, JsonSerializationContext jsonContext) {
         final var jsonObject = new JsonObject();
         switch(contextMsg) {
+            case ContextMessage.ContextDomainRepresentation contextDomainRepresentation -> {
+                jsonObject.addProperty(MessageFields.REQUEST_METHOD.getName(), MessageRequestMethods.CONTEXT_DOMAIN_REPRESENTATION.getName());
+            }
             case ContextMessage.ValidateContextBasedAccess validateContextBasecAccess -> {
                 jsonObject.addProperty(MessageFields.REQUEST_METHOD.getName(), MessageRequestMethods.VALIDATE_CONTEXT_BASED_ACCESS.getName());
                 jsonObject.addProperty(MessageFields.ACCESS_REQUESTER_URI.getName(), validateContextBasecAccess.accessRequesterURI());

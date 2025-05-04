@@ -3,6 +3,7 @@ package org.hyperagents.yggdrasil.utils.impl;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Set;
 
 import org.eclipse.rdf4j.model.Model;
@@ -25,7 +26,6 @@ import ch.unisg.ics.interactions.wot.td.schemas.ObjectSchema;
 import ch.unisg.ics.interactions.wot.td.schemas.StringSchema;
 import ch.unisg.ics.interactions.wot.td.security.SecurityScheme;
 import io.vertx.core.http.HttpMethod;
-
 /**
  * This class is an implementation of the RepresentationFactory interface. It provides methods to
  * create representations of platforms, workspaces, artifacts, and bodies. The representations are
@@ -61,6 +61,90 @@ public class RepresentationFactoryTDImplt implements RepresentationFactory {
     addAction(td, "update" + type + "Representation", target, PUT, "Update" + type);
     addAction(td, "delete" + type + "Representation", target, DELETE, "Delete" + type);
   }
+  
+  public String getContextDomainRepresentation(
+          String contextDomainURI,
+          String contextDomainGroupURI,
+          List<String> contextStreams,
+          List<String> membershipRuleQueryURLs) {
+
+      // Create the Thing Description builder for the Context Domain
+      final var td = new ThingDescription.Builder("ContextDomain")
+              .addThingURI(contextDomainURI)
+              .addSemanticType(HMAS + "ContextDomain");
+
+        // Add the Context Domain Group as a sub-resource
+        if (contextDomainGroupURI != null) {
+            td.addThingURI(contextDomainGroupURI);
+            td.addSemanticType(HMAS + "ContextDomainGroup");
+            td.addAction(
+                    new ActionAffordance.Builder(
+                            "getContextDomainGroupRepresentation",
+                            new Form.Builder(contextDomainGroupURI)
+                                    .setMethodName(GET)
+                                    .setContentType("application/json")
+                                    .build()
+                    ).addSemanticType(HMAS + "PerceiveContextDomainGroup").build()
+            );
+        }
+        // Add membershipRuleQueryURLs
+        if (membershipRuleQueryURLs != null) {
+            for (String queryURL : membershipRuleQueryURLs) {
+                td.addAction(
+                        new ActionAffordance.Builder(
+                                "getMembershipRule",
+                                new Form.Builder(queryURL)
+                                        .setMethodName(GET)
+                                        .setContentType("application/json")
+                                        .build()
+                        ).addSemanticType(HMAS + "PerceiveMembershipRule").build()
+                );
+            }
+        }
+        // Add context streams
+        if (contextStreams != null) {
+            for (String stream : contextStreams) {
+                td.addAction(
+                        new ActionAffordance.Builder(
+                                "getContextStream",
+                                new Form.Builder(stream)
+                                        .setMethodName(GET)
+                                        .setContentType("application/json")
+                                        .build()
+                        ).addSemanticType(HMAS + "PerceiveContextStream").build()
+                );
+            }
+        }
+        // Add actions for subscribing and unsubscribing to context streams
+        if (notificationConfig.isEnabled()) {
+            td.addAction(
+                    new ActionAffordance.Builder(
+                            "subscribeToContextDomain",
+                            new Form.Builder(this.notificationConfig.getWebSubHubUri())
+                                    .setMethodName(HttpMethod.POST.name())
+                                    .setContentType("application/json")
+                                    .addSubProtocol(WEBSUB)
+                                    .build()
+                    ).addSemanticType(HMAS + "websub/subscribeToContextDomain").build()
+            );
+            td.addAction(
+                    new ActionAffordance.Builder(
+                            "unsubscribeFromContextDomain",
+                            new Form.Builder(this.notificationConfig.getWebSubHubUri())
+                                    .setMethodName(HttpMethod.POST.name())
+                                    .setContentType("application/json")
+                                    .addSubProtocol(WEBSUB)
+                                    .build()
+                    ).addSemanticType(HMAS + "websub/unsubscribeFromContextDomain").build()
+            );
+        }
+        // Wrap the Thing Description in a Resource Profile
+        wrapInResourceProfile(td, contextDomainURI, contextDomainURI + "#contextDomain");
+        // Serialize the Thing Description
+
+      return serializeThingDescription(td);
+  }
+
 
   private void addAction(final ThingDescription.Builder thingDescription,
                          final String name,

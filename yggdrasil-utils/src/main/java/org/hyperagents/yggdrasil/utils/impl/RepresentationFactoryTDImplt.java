@@ -182,11 +182,11 @@ public class RepresentationFactoryTDImplt implements RepresentationFactory {
     ) {
     final var td = new ThingDescription.Builder(streamName)
       .addThingURI(streamURI)
-      .addSemanticType(HMAS + "ContextStream")
-      .addSemanticType(HMAS + "ContextStream" + streamName);
+      .addSemanticType(HMAS + "ContextStream");
+      // .addSemanticType(HMAS + "ContextStream" + streamName);
 
     for (String contextAssertion : contextAssertions) {
-      td.addSemanticType(contextAssertion);
+      continue;
     }
     
     return serializeThingDescription(td);

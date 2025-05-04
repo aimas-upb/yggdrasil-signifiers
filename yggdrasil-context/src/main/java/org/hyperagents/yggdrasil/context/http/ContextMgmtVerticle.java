@@ -326,6 +326,11 @@ public class ContextMgmtVerticle extends AbstractVerticle {
                 
                 try {
                     switch (message.body()) {
+                        
+                        case ContextMessage.GetContextStreamRepresentation msgContent -> {
+                            LOGGER.info("Handling GetContextStreamRepresentation action...");
+                            message.reply(contextStreamMap.get(msgContent.streamURI()).getHypermediaRepresentation());
+                        }
                         case ContextMessage.ValidateContextBasedAccess msgContent -> {
                             LOGGER.info("Handling Context-based access validation action...");
                             validateContextBasedAccess(msgContent.accessRequesterURI(), msgContent.accessedResourceURI(), message);

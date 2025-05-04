@@ -28,6 +28,7 @@ public class HttpServerVerticle extends AbstractVerticle {
   private static final String WORKSPACE_PATH = "/workspaces/:wkspid";
   private static final String ARTIFACT_PATH = "/workspaces/:wkspid/artifacts/:artid";
   private static final String TURTLE_CONTENT_TYPE = "text/turtle";
+  private static final String CONTEXT_STREAM_PATH = "/context/streams/:streamid";
 
   private HttpServer server;
   private EnvironmentConfig environmentConfig;
@@ -209,6 +210,9 @@ public class HttpServerVerticle extends AbstractVerticle {
     // ======== Context Management routes ========
     // Route that handles requests to verify if a subscription 
     // for a context stream (given in the hub.topic query parameter) is valid
+    final Route contextStreamRepresentation = router.get(CONTEXT_STREAM_PATH)
+        .handler(contextHandler::handleContextServiceRepresentation);
+
     final Route contextStreamSubscriptionVerification = router.get("/" + ContextManagementConfig.CONTEXT_STREAMS_PATH)
         .handler(contextHandler::handleVerifyContextStreamSubscription);
     
@@ -220,6 +224,7 @@ public class HttpServerVerticle extends AbstractVerticle {
     if (!this.contextManagementConfig.isEnabled()) {
       contextStreamUpdatesRoute.disable();
       contextStreamSubscriptionVerification.disable();
+      contextStreamRepresentation.disable();
     }
 
     router.get("/query").handler(handler::handleQuery);

@@ -26,6 +26,7 @@ enum MessageRequestMethods {
   GET_PROFILED_CONTEXT("getProfiledContext"),
   CONTEXT_STREAM_VERIFY_SUBSCRIPTION("contextStreamVerifySubscription"),
   CONTEXT_STREAM_UPDATE("contextStreamUpdate"),
+  GET_CONTEXT_STREAM_REPRESENTATION("getContextStreamRepresentation"),
   // WAC
   AUTHORIZE_ACCESS("authorizeAccess"),
   GET_WAC_RESOURCE("getWACResource"),

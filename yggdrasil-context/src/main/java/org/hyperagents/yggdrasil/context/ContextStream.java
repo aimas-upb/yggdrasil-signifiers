@@ -9,15 +9,20 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.apache.jena.graph.Graph;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.hyperagents.yggdrasil.utils.HttpInterfaceConfig;
 import org.hyperagents.yggdrasil.utils.RepresentationFactory;
+import org.hyperagents.yggdrasil.utils.WebSubConfig;
 import org.hyperagents.yggdrasil.utils.impl.RepresentationFactoryTDImplt;
 import org.streamreasoning.rsp4j.api.stream.data.DataStream;
 import org.streamreasoning.rsp4j.io.DataStreamImpl;
+
+import io.vertx.core.Vertx;
 
 
 public class ContextStream {
     
     private static final Logger LOGGER = LogManager.getLogger(ContextStream.class);
+    private static final String DEFAULT_CONFIG_VALUE = "default";
 
     private final String streamName;
     private final String streamURI;
@@ -35,8 +40,18 @@ public class ContextStream {
      * The URIs of the ContextAssertions that are part of this stream.
      */
     private final List<String> contextAssertionTypes = new ArrayList<>();
+    private final WebSubConfig notificationConfig = Vertx.currentContext()
+      .owner()
+      .sharedData()
+      .<String, WebSubConfig>getLocalMap("notification-config")
+      .get(DEFAULT_CONFIG_VALUE);
+  private HttpInterfaceConfig httpConfig = Vertx.currentContext()
+      .owner()
+      .sharedData()
+      .<String, HttpInterfaceConfig>getLocalMap("http-config")
+      .get(DEFAULT_CONFIG_VALUE);
     private RepresentationFactoryTDImplt representationFactory =
-            new RepresentationFactoryTDImplt(null, null);
+            new RepresentationFactoryTDImplt(this.httpConfig, this.notificationConfig);
 
     public final String getHypermediaRepresentation() {
         return this.representationFactory.createContextStreamRepresentation(

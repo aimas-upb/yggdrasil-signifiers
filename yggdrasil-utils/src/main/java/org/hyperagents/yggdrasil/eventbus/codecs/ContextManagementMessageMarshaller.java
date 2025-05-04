@@ -60,6 +60,10 @@ public class ContextManagementMessageMarshaller
             case ContextMessage.GetStaticContext getStaticContext -> {
                 jsonObject.addProperty(MessageFields.REQUEST_METHOD.getName(), MessageRequestMethods.GET_STATIC_CONTEXT.getName());
             }
+            case ContextMessage.GetContextStreamRepresentation getContextStreamRepresentation -> {
+                jsonObject.addProperty(MessageFields.REQUEST_METHOD.getName(), MessageRequestMethods.GET_CONTEXT_STREAM_REPRESENTATION.getName());
+                jsonObject.addProperty(MessageFields.STREAM_URI.getName(), getContextStreamRepresentation.streamURI());
+            }
             case ContextMessage.GetProfiledContext getProfiledContext -> {
                 jsonObject.addProperty(MessageFields.REQUEST_METHOD.getName(), MessageRequestMethods.GET_PROFILED_CONTEXT.getName());
                 jsonObject.addProperty(MessageFields.CONTEXT_ASSERTION_TYPE.getName(), getProfiledContext.contextAssertionType());

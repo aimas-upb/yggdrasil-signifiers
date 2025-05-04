@@ -52,6 +52,25 @@ public class ContextMgmtHandler {
     public void handleContextServiceRepresentation(RoutingContext context) {
       LOGGER.info("Handling Context Service Representation retrieval action..." + " Context: " + context);
       // TODO: Implement the logic to retrieve the context service representation of an Yggdrasil environment
+        final String streamURI = context.request().absoluteURI();
+        if (streamURI == null || streamURI.isEmpty()) {
+            LOGGER.warn("Missing or empty stream URI in request");
+            context.response().setStatusCode(400).end("Missing or empty stream URI");
+            return;
+        }
+        this.contextMessageBox.sendMessage(new ContextMessage.GetContextStreamRepresentation(streamURI))
+            .onSuccess(r -> {
+                LOGGER.info("Context Service Representation retrieved successfully.");
+                context.response()
+                    .setStatusCode(200)
+                    .putHeader("Content-Type", "application/json")
+                    .end(r.body().toString());
+            })
+            .onFailure(t -> {
+                LOGGER.error("Error retrieving Context Service Representation", t);
+                context.response().setStatusCode(500).end();
+            });
+      
     }
 
 

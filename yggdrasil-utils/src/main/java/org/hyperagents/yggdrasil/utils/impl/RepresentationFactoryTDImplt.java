@@ -9,6 +9,7 @@ import java.util.Set;
 import org.eclipse.rdf4j.model.Model;
 import org.eclipse.rdf4j.model.impl.LinkedHashModel;
 import org.eclipse.rdf4j.model.vocabulary.RDF;
+import org.eclipse.rdf4j.model.IRI;
 import org.hyperagents.yggdrasil.utils.HttpInterfaceConfig;
 import org.hyperagents.yggdrasil.utils.RdfModelUtils;
 import org.hyperagents.yggdrasil.utils.RepresentationFactory;
@@ -174,23 +175,41 @@ public class RepresentationFactoryTDImplt implements RepresentationFactory {
         td
     );
   }
-
+  
   public String createContextStreamRepresentation( 
     final String streamName,
     final String streamURI,
     final List<String> contextAssertions
-    ) {
+) {
     final var td = new ThingDescription.Builder(streamName)
-      .addThingURI(streamURI)
-      .addSemanticType(HMAS + "ContextStream");
-      // .addSemanticType(HMAS + "ContextStream" + streamName);
+        .addThingURI(streamURI)
+        .addSemanticType(HMAS + "ContextStream");
 
-    for (String contextAssertion : contextAssertions) {
-      continue;
+    final Model streamMetadata = new LinkedHashModel();
+    IRI streamIri = RdfModelUtils.createIri(streamURI);
+
+    for (String assertionType : contextAssertions) {
+        streamMetadata.add(
+            streamIri,
+            RdfModelUtils.createIri(HMAS + "hasContextAssertion"),
+            RdfModelUtils.createIri(assertionType)
+        );
     }
-    
+
+    streamMetadata.add(
+        streamIri,
+        RdfModelUtils.createIri(HMAS + "hasUpdateMode"),
+        RdfModelUtils.createIri(HMAS + "TimePeriodicUpdate")
+    );
+    streamMetadata.add(
+        streamIri,
+        RdfModelUtils.createIri(HMAS + "updateFrequency"),
+        org.eclipse.rdf4j.model.impl.SimpleValueFactory.getInstance().createLiteral(String.valueOf(5))
+    );
+
+    td.addGraph(streamMetadata);
     return serializeThingDescription(td);
-  }
+}
 
   @Override
   public String createWorkspaceRepresentation(

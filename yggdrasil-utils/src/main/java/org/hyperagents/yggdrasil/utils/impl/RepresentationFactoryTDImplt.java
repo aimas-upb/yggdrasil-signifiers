@@ -196,16 +196,11 @@ public class RepresentationFactoryTDImplt implements RepresentationFactory {
         );
     }
 
-    streamMetadata.add(
-        streamIri,
-        RdfModelUtils.createIri(HMAS + "hasUpdateMode"),
-        RdfModelUtils.createIri(HMAS + "TimePeriodicUpdate")
-    );
-    streamMetadata.add(
-        streamIri,
-        RdfModelUtils.createIri(HMAS + "updateFrequency"),
-        org.eclipse.rdf4j.model.impl.SimpleValueFactory.getInstance().createLiteral(String.valueOf(5))
-    );
+    // streamMetadata.add(
+    //     streamIri,
+    //     RdfModelUtils.createIri(HMAS + "hasUpdateMode"),
+    //     RdfModelUtils.createIri(HMAS + "TimePeriodicUpdate")
+    // );
 
     td.addGraph(streamMetadata);
     return serializeThingDescription(td);

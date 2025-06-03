@@ -30,6 +30,8 @@ public class HttpServerVerticle extends AbstractVerticle {
   private static final String TURTLE_CONTENT_TYPE = "text/turtle";
   private static final String CONTEXT_STREAM_PATH = "/context/streams/:streamid";
 
+  private static final String CONTEXT_DOMAIN = "/context/domains/:domainid";
+
   private HttpServer server;
   private EnvironmentConfig environmentConfig;
   private WebSubConfig notificationConfig;
@@ -184,6 +186,9 @@ public class HttpServerVerticle extends AbstractVerticle {
     // TODO: currently only handles artifacts, refactor to handle any resource
     router.get(ARTIFACT_PATH + "/wac/").handler(handler::handleRedirectWithoutSlash);
     final var artifactAuthRepresentationRoute = router.get(ARTIFACT_PATH + "/wac").handler(wacHandler::handleWACRepresentation);
+
+    router.get(CONTEXT_DOMAIN)
+				.handler(contextHandler::handleGetContexts);
 
     if (!this.wacConfig.isEnabled()) {
       artifactAuthRepresentationRoute.disable();

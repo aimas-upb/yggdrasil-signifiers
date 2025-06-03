@@ -26,6 +26,7 @@ public class ContextMgmtHandler {
     // Pattern to extract URI from Link header
     private static final Pattern LINK_PATTERN = Pattern.compile("<([^>]*)>\\s*;\\s*rel\\s*=\\s*\"?self\"?");
     
+    
     private final Vertx vertx;
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -73,6 +74,28 @@ public class ContextMgmtHandler {
       
     }
 
+    public void handleGetContexts(RoutingContext context) {
+        LOGGER.info("Handling Contexts retrieval action..." + " Context: " + context);
+        final String contextURI = context.request().absoluteURI();
+        if (contextURI == null || contextURI.isEmpty()) {
+            LOGGER.warn("Context URI is missing or empty");
+            context.response().setStatusCode(400).end("Missing or empty context URI");
+            return;
+        }
+
+        this.contextMessageBox.sendMessage(new ContextMessage.ContextDomainRepresentation(contextURI))
+            .onSuccess(r -> {
+                LOGGER.info("Contexts retrieved successfully");
+                context.response()
+                    .setStatusCode(200)
+                    .putHeader("Content-Type", "application/json")
+                    .end(r.body());
+            })
+            .onFailure(t -> {
+                LOGGER.error("Error retrieving contexts", t);
+                context.response().setStatusCode(500).end();
+            });
+    }
 
     /**
      * Handles WebSub subscription verification requests that occur when the subscription for receiving Context Stream updates is created.

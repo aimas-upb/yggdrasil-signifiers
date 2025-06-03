@@ -22,6 +22,9 @@ import org.eclipse.rdf4j.repository.sail.SailRepository;
 import org.eclipse.rdf4j.sail.memory.MemoryStore;
 import org.hyperagents.yggdrasil.auth.model.CASHMERE;
 import org.hyperagents.yggdrasil.context.http.Utils;
+import org.hyperagents.yggdrasil.utils.HttpInterfaceConfig;
+import org.hyperagents.yggdrasil.utils.WebSubConfig;
+import org.hyperagents.yggdrasil.utils.impl.RepresentationFactoryTDImplt;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.streamreasoning.rsp4j.api.engine.config.EngineConfiguration;
@@ -30,6 +33,8 @@ import org.streamreasoning.rsp4j.api.stream.data.DataStream;
 import org.streamreasoning.rsp4j.csparql2.engine.CSPARQLEngine;
 import org.streamreasoning.rsp4j.csparql2.engine.JenaContinuousQueryExecution;
 import org.streamreasoning.rsp4j.csparql2.sysout.ResponseFormatterFactory;
+
+import io.vertx.core.Vertx;
 
 
 /**
@@ -59,6 +64,22 @@ public class ContextDomain {
     private final List<String> membershipRuleQueryURLs;
     private final Map<String, JenaContinuousQueryExecution> membershipRuleQueries = new HashMap<>();
     
+    // Facotry for the representation of the ContextDomain
+    private final WebSubConfig notificationConfig = Vertx.currentContext()
+      .owner()
+      .sharedData()
+      .<String, WebSubConfig>getLocalMap("notification-config")
+      .get("default");
+    private HttpInterfaceConfig httpConfig = Vertx.currentContext()
+      .owner()
+      .sharedData()
+      .<String, HttpInterfaceConfig>getLocalMap("http-config")
+      .get("default");
+
+    private RepresentationFactoryTDImplt representationFactory = new RepresentationFactoryTDImplt(
+            this.httpConfig, this.notificationConfig);
+
+
     // RDF store for the graph denoting the ContextDomainGroup memberships
     private SailRepository cdgMembershipRepo;
 
@@ -93,6 +114,13 @@ public class ContextDomain {
         } catch (MalformedURLException | ConfigurationException | URISyntaxException e) {
             LOGGER.error("Error while initializing the RSPQL query engine for the ContextDomain " + contextDomainURI + ": " + e.getMessage());
         }
+    }
+
+    // ContextDomain RDF representation
+    public String getContextDomainRepresentation() {
+        // Transform the list of ContextStreams into a list of their URIs
+        return this.representationFactory.getContextDomainRepresentation(contextDomainURI, getContextDomainGroupURI(), null, 
+                membershipRuleQueryURLs);
     }
 
 

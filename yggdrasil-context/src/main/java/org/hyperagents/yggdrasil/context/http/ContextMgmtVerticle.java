@@ -331,6 +331,20 @@ public class ContextMgmtVerticle extends AbstractVerticle {
                             LOGGER.info("Handling GetContextStreamRepresentation action...");
                             message.reply(contextStreamMap.get(msgContent.streamURI()).getHypermediaRepresentation());
                         }
+                        // Case for ContextDomainRepresentation
+                        case ContextMessage.ContextDomainRepresentation msgContent -> {
+                            LOGGER.info("Handling ContextDomainRepresentation action...");
+                            // Add null check and proper error handling
+                            ContextDomain domain = contextDomains.get(msgContent.contextDomainURI());
+                            if (domain == null) {
+                                LOGGER.warn("Context domain not found: " + msgContent.contextDomainURI());
+                                message.fail(HttpStatus.SC_NOT_FOUND,
+                                        "Context domain not found: " + msgContent.contextDomainURI());
+                                return;
+                            }
+                            message.reply(domain.getContextDomainRepresentation());
+                        }
+
                         case ContextMessage.ValidateContextBasedAccess msgContent -> {
                             LOGGER.info("Handling Context-based access validation action...");
                             validateContextBasedAccess(msgContent.accessRequesterURI(), msgContent.accessedResourceURI(), message);

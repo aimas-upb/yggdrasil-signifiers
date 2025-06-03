@@ -19,6 +19,7 @@ enum MessageRequestMethods {
   DO_ACTION("performAction"),
   GET_WORKSPACES("GetWorkspaces"),
   GET_ARTIFACTS("GetArtifacts"),
+  CONTEXT_DOMAIN_REPRESENTATION("ContextDomainRepresentation"),
   QUERY("query"),
   // Context Management
   VALIDATE_CONTEXT_BASED_ACCESS("validateContextBasedAccess"),

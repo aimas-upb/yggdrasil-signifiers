@@ -51,6 +51,12 @@ public class ContextMessageBox implements Messagebox<ContextMessage> {
                     new ContextManagementMessageMarshaller()
                 )
             );
+            
+            // Register the message handler for the ContextDomain representation
+            this.eventBus.registerDefaultCodec(
+                ContextMessage.ContextDomainRepresentation.class,
+                new GenericMessageCodec<>(ContextMessage.ContextDomainRepresentation.class, new ContextManagementMessageMarshaller())
+            );
         }
         else {
             LOGGER.warn("Context Management is not enabled. The context message exchange will not be initialized.");

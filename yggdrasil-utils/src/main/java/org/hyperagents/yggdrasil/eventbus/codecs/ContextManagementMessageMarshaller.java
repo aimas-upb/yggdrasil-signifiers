@@ -32,6 +32,10 @@ public class ContextManagementMessageMarshaller
                 jsonObject.get(MessageFields.ACCESS_REQUESTER_URI.getName()).getAsString(),
                 jsonObject.get(MessageFields.ACCESSED_RESOURCE_URI.getName()).getAsString()
             );
+            case VALIDATE_WORKSPACE_CONTEXT_BASED_ACCESS -> new ContextMessage.ValidateWorkspaceContextBasedAccess(
+                jsonObject.get(MessageFields.ACCESS_REQUESTER_URI.getName()).getAsString(),
+                jsonObject.get(MessageFields.ACCESSED_RESOURCE_URI.getName()).getAsString()
+            );
             case GET_STATIC_CONTEXT -> new ContextMessage.GetStaticContext();
             case GET_PROFILED_CONTEXT -> new ContextMessage.GetProfiledContext(
                 jsonObject.get(MessageFields.CONTEXT_ASSERTION_TYPE.getName()).getAsString()
@@ -52,10 +56,15 @@ public class ContextManagementMessageMarshaller
     public JsonElement serialize(ContextMessage contextMsg, Type type, JsonSerializationContext jsonContext) {
         final var jsonObject = new JsonObject();
         switch(contextMsg) {
-            case ContextMessage.ValidateContextBasedAccess validateContextBasecAccess -> {
+            case ContextMessage.ValidateContextBasedAccess validateContextBasedAccess -> {
                 jsonObject.addProperty(MessageFields.REQUEST_METHOD.getName(), MessageRequestMethods.VALIDATE_CONTEXT_BASED_ACCESS.getName());
-                jsonObject.addProperty(MessageFields.ACCESS_REQUESTER_URI.getName(), validateContextBasecAccess.accessRequesterURI());
-                jsonObject.addProperty(MessageFields.ACCESSED_RESOURCE_URI.getName(), validateContextBasecAccess.accessedResourceURI());
+                jsonObject.addProperty(MessageFields.ACCESS_REQUESTER_URI.getName(), validateContextBasedAccess.accessRequesterURI());
+                jsonObject.addProperty(MessageFields.ACCESSED_RESOURCE_URI.getName(), validateContextBasedAccess.accessedResourceURI());
+            }
+            case ContextMessage.ValidateWorkspaceContextBasedAccess validateWorkspaceAccess -> {
+                jsonObject.addProperty(MessageFields.REQUEST_METHOD.getName(), MessageRequestMethods.VALIDATE_WORKSPACE_CONTEXT_BASED_ACCESS.getName());
+                jsonObject.addProperty(MessageFields.ACCESS_REQUESTER_URI.getName(), validateWorkspaceAccess.accessRequesterURI());
+                jsonObject.addProperty(MessageFields.ACCESSED_RESOURCE_URI.getName(), validateWorkspaceAccess.accessedWorkspaceURI());
             }
             case ContextMessage.GetStaticContext getStaticContext -> {
                 jsonObject.addProperty(MessageFields.REQUEST_METHOD.getName(), MessageRequestMethods.GET_STATIC_CONTEXT.getName());

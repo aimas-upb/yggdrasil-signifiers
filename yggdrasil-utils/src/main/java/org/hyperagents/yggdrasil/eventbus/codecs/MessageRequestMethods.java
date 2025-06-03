@@ -22,6 +22,7 @@ enum MessageRequestMethods {
   QUERY("query"),
   // Context Management
   VALIDATE_CONTEXT_BASED_ACCESS("validateContextBasedAccess"),
+  VALIDATE_WORKSPACE_CONTEXT_BASED_ACCESS("validateWorkspaceContextBasedAccess"),
   GET_STATIC_CONTEXT("getStaticContext"),
   GET_PROFILED_CONTEXT("getProfiledContext"),
   CONTEXT_STREAM_VERIFY_SUBSCRIPTION("contextStreamVerifySubscription"),

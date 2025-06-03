@@ -5,10 +5,10 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * An interface representing a Joined Agent in the Yggdrasil model.
+ * An interface representing a Workspace in the Yggdrasil model.
  *
- * <p>A Joined Agent is a type of agent that has joined a workspace in the Yggdrasil model.
- * Each Joined Agent has a unique name.
+ * <p>A Workspace is a container that can hold artifacts and other workspaces.
+ * Each Workspace has a unique name.
  */
 public interface Workspace {
   String getName();
@@ -22,4 +22,6 @@ public interface Workspace {
   Set<YggdrasilAgent> getAgents();
 
   Optional<Path> getRepresentation();
+  
+  Optional<String> getContextAccessPolicyURL();
 }

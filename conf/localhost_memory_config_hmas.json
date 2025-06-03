@@ -14,7 +14,7 @@
       "callback-uri" : "http://localhost:8081/callback",
       "body-config" : [
         {
-          "metadata" : "/mnt/c/Users/Calin/Desktop/Facultate/An4/Licenta/yggdrasil-signifiers/src/main/resources/a1_test_metadata.ttl"
+          "metadata" : "/home/calin/yggdrasil-signifiers/src/main/resources/a1_test_metadata.ttl"
         }
       ]
     }
@@ -41,12 +41,12 @@
     "workspaces" : [
       {
         "name" : "w1",
-        "metadata" : "/mnt/c/Users/Calin/Desktop/Facultate/An4/Licenta/yggdrasil-signifiers/src/main/resources/w1_test_metadata.ttl",
+        "metadata" : "/home/calin/yggdrasil-signifiers/src/main/resources/w1_test_metadata.ttl",
         "artifacts" : [
           {
             "name" : "c1",
             "class" : "http://example.org/Counter",
-            "metadata" : "/mnt/c/Users/Calin/Desktop/Facultate/An4/Licenta/yggdrasil-signifiers/src/main/resources/c1_test_metadata.ttl",
+            "metadata" : "/home/calin/yggdrasil-signifiers/src/main/resources/c1_test_metadata.ttl",
             "focused-by" : ["test_agent"]
           }
         ],

@@ -57,4 +57,11 @@ public sealed interface ContextMessage {
      */
     record VerifyContextStreamSubscription(String streamURI) implements ContextMessage {
     }
+
+    record ContextDomainRepresentation(String contextDomainURI) implements ContextMessage {
+    }
+
+    record ValidateWorkspaceContextBasedAccess(String accessRequesterURI, String accessedWorkspaceURI)
+            implements ContextMessage {
+    }
 }

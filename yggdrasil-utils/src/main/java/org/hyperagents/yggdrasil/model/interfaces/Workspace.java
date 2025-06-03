@@ -22,4 +22,7 @@ public interface Workspace {
   Set<YggdrasilAgent> getAgents();
 
   Optional<Path> getRepresentation();
+
+  // Add support for context access policy URL
+  Optional<String> getContextAccessPolicyURL();
 }

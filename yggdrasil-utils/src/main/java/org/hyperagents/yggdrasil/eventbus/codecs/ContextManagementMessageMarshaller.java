@@ -44,6 +44,10 @@ public class ContextManagementMessageMarshaller
             case CONTEXT_STREAM_VERIFY_SUBSCRIPTION -> new ContextMessage.VerifyContextStreamSubscription(
                 jsonObject.get(MessageFields.STREAM_URI.getName()).getAsString()
             );
+            case VALIDATE_WORKSPACE_CONTEXT_BASED_ACCESS -> new ContextMessage.ValidateWorkspaceContextBasedAccess(
+                jsonObject.get(MessageFields.ACCESS_REQUESTER_URI.getName()).getAsString(),
+                jsonObject.get("accessedWorkspaceURI").getAsString()
+            );
             default -> throw new JsonParseException("The request method is not valid");
         };
     }
@@ -52,10 +56,12 @@ public class ContextManagementMessageMarshaller
     public JsonElement serialize(ContextMessage contextMsg, Type type, JsonSerializationContext jsonContext) {
         final var jsonObject = new JsonObject();
         switch(contextMsg) {
-            case ContextMessage.ValidateContextBasedAccess validateContextBasecAccess -> {
-                jsonObject.addProperty(MessageFields.REQUEST_METHOD.getName(), MessageRequestMethods.VALIDATE_CONTEXT_BASED_ACCESS.getName());
-                jsonObject.addProperty(MessageFields.ACCESS_REQUESTER_URI.getName(), validateContextBasecAccess.accessRequesterURI());
-                jsonObject.addProperty(MessageFields.ACCESSED_RESOURCE_URI.getName(), validateContextBasecAccess.accessedResourceURI());
+            case ContextMessage.ValidateContextBasedAccess validateAccess -> {
+                JsonObject validateAccessObj = new JsonObject();
+                validateAccessObj.addProperty("type", "ValidateContextBasedAccess");
+                validateAccessObj.addProperty("accessRequesterURI", validateAccess.accessRequesterURI());
+                validateAccessObj.addProperty("accessedResourceURI", validateAccess.accessedResourceURI());
+                return validateAccessObj;
             }
             case ContextMessage.GetStaticContext getStaticContext -> {
                 jsonObject.addProperty(MessageFields.REQUEST_METHOD.getName(), MessageRequestMethods.GET_STATIC_CONTEXT.getName());
@@ -74,6 +80,7 @@ public class ContextManagementMessageMarshaller
                 jsonObject.addProperty(MessageFields.REQUEST_METHOD.getName(), MessageRequestMethods.CONTEXT_STREAM_VERIFY_SUBSCRIPTION.getName());
                 jsonObject.addProperty(MessageFields.STREAM_URI.getName(), verifyContextStreamSubscription.streamURI());
             }
+            default -> throw new IllegalArgumentException("Unknown ContextMessage type: " + contextMsg);
         }
 
         return jsonObject;

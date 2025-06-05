@@ -22,6 +22,7 @@ enum MessageRequestMethods {
   CONTEXT_DOMAIN_REPRESENTATION("ContextDomainRepresentation"),
   QUERY("query"),
   // Context Management
+  CONTAINS_ASSERTION("containsAssertion"),
   VALIDATE_CONTEXT_BASED_ACCESS("validateContextBasedAccess"),
   GET_STATIC_CONTEXT("getStaticContext"),
   GET_PROFILED_CONTEXT("getProfiledContext"),

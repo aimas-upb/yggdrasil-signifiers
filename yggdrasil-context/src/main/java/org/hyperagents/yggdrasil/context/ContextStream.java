@@ -40,6 +40,7 @@ public class ContextStream {
      * The URIs of the ContextAssertions that are part of this stream.
      */
     private final List<String> contextAssertionTypes = new ArrayList<>();
+    
     private final WebSubConfig notificationConfig = Vertx.currentContext()
       .owner()
       .sharedData()

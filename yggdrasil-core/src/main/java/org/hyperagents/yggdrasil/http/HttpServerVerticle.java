@@ -30,7 +30,7 @@ public class HttpServerVerticle extends AbstractVerticle {
   private static final String TURTLE_CONTENT_TYPE = "text/turtle";
   private static final String CONTEXT_STREAM_PATH = "/context/streams/:streamid";
 
-  private static final String CONTEXT_DOMAIN = "/context/domains/:domainid";
+  private static final String CONTEXT_DOMAIN_PATH = "/context/domains/:domainid";
 
   private HttpServer server;
   private EnvironmentConfig environmentConfig;
@@ -187,9 +187,6 @@ public class HttpServerVerticle extends AbstractVerticle {
     router.get(ARTIFACT_PATH + "/wac/").handler(handler::handleRedirectWithoutSlash);
     final var artifactAuthRepresentationRoute = router.get(ARTIFACT_PATH + "/wac").handler(wacHandler::handleWACRepresentation);
 
-    router.get(CONTEXT_DOMAIN)
-				.handler(contextHandler::handleGetContexts);
-
     if (!this.wacConfig.isEnabled()) {
       artifactAuthRepresentationRoute.disable();
     }
@@ -215,8 +212,20 @@ public class HttpServerVerticle extends AbstractVerticle {
     // ======== Context Management routes ========
     // Route that handles requests to verify if a subscription 
     // for a context stream (given in the hub.topic query parameter) is valid
-    final Route contextStreamRepresentation = router.get(CONTEXT_STREAM_PATH)
+    final Route contextServiceRepresentation = router.get("/context")
         .handler(contextHandler::handleContextServiceRepresentation);
+
+    final Route staticContext = router.get("/context/graphs/static")
+        .handler(contextHandler::handleStaticContextRetrieval);
+
+    final Route profiledContext = router.get("/context/graphs/profiled")
+        .handler(contextHandler::handleProfiledContextRetrieval);
+
+    final Route contextDomainRepresentation = router.get(CONTEXT_DOMAIN_PATH)
+        .handler(contextHandler::handleGetContextDomain);
+
+    final Route contextStreamRepresentation = router.get(CONTEXT_STREAM_PATH)
+        .handler(contextHandler::handleContextStreamRepresentation);
 
     final Route contextStreamSubscriptionVerification = router.get("/" + ContextManagementConfig.CONTEXT_STREAMS_PATH)
         .handler(contextHandler::handleVerifyContextStreamSubscription);
@@ -225,11 +234,17 @@ public class HttpServerVerticle extends AbstractVerticle {
     final Route contextStreamUpdatesRoute = router.post("/" + ContextManagementConfig.STREAM_UPDATES_PATH)
         .handler(contextHandler::handleContextStreamUpdate);
 
+    // Route that handles requests to validate if context assertion types are contained in the repositories
+    final Route containsAssertionRoute = router.post("/context/assertions/contains")
+        .handler(contextHandler::handleContainsAssertion);
+
     // If the context management service is disabled, disable the context management routes
     if (!this.contextManagementConfig.isEnabled()) {
       contextStreamUpdatesRoute.disable();
       contextStreamSubscriptionVerification.disable();
       contextStreamRepresentation.disable();
+      contextDomainRepresentation.disable();
+      containsAssertionRoute.disable();
     }
 
     router.get("/query").handler(handler::handleQuery);

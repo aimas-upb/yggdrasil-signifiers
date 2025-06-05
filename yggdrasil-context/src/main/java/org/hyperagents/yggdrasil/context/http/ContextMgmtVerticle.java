@@ -1,11 +1,13 @@
 package org.hyperagents.yggdrasil.context.http;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -26,8 +28,11 @@ import org.apache.logging.log4j.Logger;
 import org.eclipse.rdf4j.common.exception.ValidationException;
 import org.eclipse.rdf4j.common.iteration.Iterations;
 import org.eclipse.rdf4j.model.IRI;
+import org.eclipse.rdf4j.model.Resource;
 import org.eclipse.rdf4j.model.Statement;
+import org.eclipse.rdf4j.model.Value;
 import org.eclipse.rdf4j.model.impl.SimpleValueFactory;
+import org.eclipse.rdf4j.model.vocabulary.RDF;
 import org.eclipse.rdf4j.model.vocabulary.RDF4J;
 import org.eclipse.rdf4j.repository.RepositoryConnection;
 import org.eclipse.rdf4j.repository.RepositoryException;
@@ -35,6 +40,8 @@ import org.eclipse.rdf4j.repository.sail.SailRepository;
 import org.eclipse.rdf4j.repository.sail.SailRepositoryConnection;
 import org.eclipse.rdf4j.rio.RDFFormat;
 import org.eclipse.rdf4j.rio.RDFParseException;
+import org.eclipse.rdf4j.rio.RDFWriter;
+import org.eclipse.rdf4j.rio.Rio;
 import org.eclipse.rdf4j.sail.memory.MemoryStore;
 import org.eclipse.rdf4j.sail.shacl.ShaclSail;
 import org.hyperagents.yggdrasil.auth.model.CASHMERE;
@@ -326,7 +333,7 @@ public class ContextMgmtVerticle extends AbstractVerticle {
                 
                 try {
                     switch (message.body()) {
-                        
+                        // Case for ContextStreamRepresentation
                         case ContextMessage.GetContextStreamRepresentation msgContent -> {
                             LOGGER.info("Handling GetContextStreamRepresentation action...");
                             message.reply(contextStreamMap.get(msgContent.streamURI()).getHypermediaRepresentation());
@@ -334,7 +341,7 @@ public class ContextMgmtVerticle extends AbstractVerticle {
                         // Case for ContextDomainRepresentation
                         case ContextMessage.ContextDomainRepresentation msgContent -> {
                             LOGGER.info("Handling ContextDomainRepresentation action...");
-                            // Add null check and proper error handling
+                            
                             ContextDomain domain = contextDomains.get(msgContent.contextDomainURI());
                             if (domain == null) {
                                 LOGGER.warn("Context domain not found: " + msgContent.contextDomainURI());
@@ -351,13 +358,121 @@ public class ContextMgmtVerticle extends AbstractVerticle {
                         }
                         case ContextMessage.GetStaticContext msgContent -> {
                             LOGGER.info("Handling GetStaticContext action...");
-                            message.reply(staticContextRepo.getConnection().getStatements(null, null, null, false));
+                            try (RepositoryConnection conn = staticContextRepo.getConnection();
+                                ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+
+                                RDFWriter writer = Rio.createWriter(RDFFormat.TURTLE, out);
+                                conn.export(writer);
+
+                                message.reply(out.toString(StandardCharsets.UTF_8));
+                            } catch (Exception e) {
+                                LOGGER.error("Error serializing static context", e);
+                                message.fail(HttpStatus.SC_INTERNAL_SERVER_ERROR, 
+                                    "Error serializing static context: " + e.getMessage());
+                            }
                         }
                         case ContextMessage.GetProfiledContext msgContent -> {
-                            // TODO: Implement the GetProfiledContext action such that we retrieve all statements related to the ContextAssertion
-                            // referenced by the msgContent.contextAssertionType() from the profiledContextRepo
-                            LOGGER.info("Handling GetProfiledContext action...");
-                            message.reply(profiledContextRepo.getConnection().getStatements(null, null, null, false));
+                            LOGGER.info("Handling GetProfiledContext action for type: " + msgContent.contextAssertionType());
+                            try (RepositoryConnection conn = profiledContextRepo.getConnection();
+                                ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+                                    
+                                RDFWriter writer = Rio.createWriter(RDFFormat.TURTLE, out);
+                                
+                                // Get assertions of the specified type and their linked annotations
+                                String contextAssertionType = msgContent.contextAssertionType();
+                                IRI typeIri = SimpleValueFactory.getInstance().createIRI(contextAssertionType);
+                                
+                                // Find all instances of the specified assertion type
+                                List<Resource> assertionInstances = Iterations.asList(
+                                    conn.getStatements(null, RDF.TYPE, typeIri, false)
+                                ).stream()
+                                .map(Statement::getSubject)
+                                .toList();
+
+                                if (!assertionInstances.isEmpty()) {
+                                    writer.startRDF();
+                                    
+                                    // For each instance, get all its statements and annotation statements
+                                    for (Resource assertionInstance : assertionInstances) {
+                                        for (Statement stmt : Iterations.asList(conn.getStatements(assertionInstance, null, null, false))) {
+                                            writer.handleStatement(stmt);
+                                            
+                                            // If this statement links to an annotation, get the annotation's statements too
+                                            if (stmt.getPredicate().stringValue().contains("hasAnnotation")) {
+                                                Value annotationValue = stmt.getObject();
+                                                if (annotationValue instanceof Resource annotationResource) {
+                                                    Iterations.asList(conn.getStatements(annotationResource, null, null, false))
+                                                        .forEach(writer::handleStatement);
+                                                }
+                                            }
+                                        }
+                                    }
+                                    writer.endRDF();
+                                } else {
+                                    LOGGER.info("No instances found for assertion type: " + contextAssertionType);
+                                    writer.startRDF();
+                                    
+                                    IRI predicateIri = SimpleValueFactory.getInstance().createIRI("http://www.w3.org/2000/01/rdf-schema#subclassOf");
+                                    IRI objectIri = SimpleValueFactory.getInstance().createIRI("http://pervasive.semanticweb.org/ont/2017/07/consert/core#ContextAssertion");
+                                    Statement typeStmt = SimpleValueFactory.getInstance().createStatement(typeIri, predicateIri, objectIri);
+                                    writer.handleStatement(typeStmt);
+
+                                    writer.endRDF();
+                                }
+                                message.reply(out.toString(StandardCharsets.UTF_8));
+                                
+                            } catch (Exception e) {
+                                LOGGER.error("Error retrieving profiled context", e);
+                                message.fail(HttpStatus.SC_INTERNAL_SERVER_ERROR, 
+                                    "Error retrieving profiled context: " + e.getMessage());
+                            }
+                        }
+                        case ContextMessage.ContainsAssertion msgContent -> {
+                            LOGGER.info("Handling ContainsAssertion validation for type: " + msgContent.contextAssertionType());
+                            try {
+                                String contextAssertionType = msgContent.contextAssertionType();
+                                IRI typeIri = SimpleValueFactory.getInstance().createIRI(contextAssertionType);
+                                
+                                boolean foundInStatic = false;
+                                boolean foundInProfiled = false;
+                                int staticCount = 0;
+                                int profiledCount = 0;
+                                
+                                // Check in static context repository
+                                try (RepositoryConnection staticConn = staticContextRepo.getConnection()) {
+                                    List<Statement> staticStatements = Iterations.asList(
+                                        staticConn.getStatements(null, RDF.TYPE, typeIri, false)
+                                    );
+                                    staticCount = staticStatements.size();
+                                    foundInStatic = staticCount > 0;
+                                }
+                                
+                                // Check in profiled context repository  
+                                try (RepositoryConnection profiledConn = profiledContextRepo.getConnection()) {
+                                    List<Statement> profiledStatements = Iterations.asList(
+                                        profiledConn.getStatements(null, RDF.TYPE, typeIri, false)
+                                    );
+                                    profiledCount = profiledStatements.size();
+                                    foundInProfiled = profiledCount > 0;
+                                }
+                                
+                                JsonObject response = new JsonObject()
+                                    .put("contextAssertionType", contextAssertionType)
+                                    .put("contains", foundInStatic || foundInProfiled)
+                                    .put("staticContext", new JsonObject()
+                                        .put("contains", foundInStatic)
+                                        .put("instanceCount", staticCount))
+                                    .put("profiledContext", new JsonObject()
+                                        .put("contains", foundInProfiled)
+                                        .put("instanceCount", profiledCount));
+                                
+                                message.reply(response.encode());
+                                
+                            } catch (Exception e) {
+                                LOGGER.error("Error validating ContainsAssertion", e);
+                                message.fail(HttpStatus.SC_INTERNAL_SERVER_ERROR, 
+                                    "Error validating ContainsAssertion: " + e.getMessage());
+                            }
                         }
                         case ContextMessage.ContextStreamUpdate streamUpdate -> {
                             LOGGER.info("Received request to update context stream: " + streamUpdate.streamURI());  

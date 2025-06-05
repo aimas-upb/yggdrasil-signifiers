@@ -73,4 +73,15 @@ public sealed interface ContextMessage {
      */
     record ContextDomainRepresentation(String contextDomainURI) implements ContextMessage {
     }
+
+    /**
+     * A record representing a request to validate if the Context Management Service maintains instances 
+     * of a given ContextAssertion type in both static and profiled context repositories.
+     * 
+     * <p> The contextAssertionType is the URI identifying the type of context assertion to check for.
+     * 
+     * @param contextAssertionType The URI of the type of context assertion to validate.
+     */
+    record ContainsAssertion(String contextAssertionType) implements ContextMessage {
+    }
 }

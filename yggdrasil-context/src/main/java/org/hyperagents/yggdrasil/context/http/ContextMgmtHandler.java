@@ -10,9 +10,23 @@ import org.apache.logging.log4j.Logger;
 import org.hyperagents.yggdrasil.eventbus.messageboxes.ContextMessageBox;
 import org.hyperagents.yggdrasil.eventbus.messages.ContextMessage;
 import org.hyperagents.yggdrasil.model.interfaces.ContextStreamModel;
+import org.hyperagents.yggdrasil.model.interfaces.ContextDomainModel;
 import org.hyperagents.yggdrasil.utils.ContextManagementConfig;
+import org.hyperagents.yggdrasil.utils.RdfModelUtils;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import ch.unisg.ics.interactions.wot.td.ThingDescription;
+import ch.unisg.ics.interactions.wot.td.affordances.ActionAffordance;
+import ch.unisg.ics.interactions.wot.td.affordances.Form;
+import ch.unisg.ics.interactions.wot.td.schemas.ObjectSchema;
+import ch.unisg.ics.interactions.wot.td.schemas.StringSchema;
+import ch.unisg.ics.interactions.wot.td.security.SecurityScheme;
+import ch.unisg.ics.interactions.wot.td.io.TDGraphWriter;
+import ch.unisg.ics.interactions.wot.td.schemas.ArraySchema;
+import ch.unisg.ics.interactions.wot.td.schemas.NumberSchema;
+
+import org.eclipse.rdf4j.model.IRI;
+import org.eclipse.rdf4j.model.Model;
+import org.eclipse.rdf4j.model.impl.LinkedHashModel;
 
 import io.vertx.core.MultiMap;
 import io.vertx.core.Vertx;
@@ -28,9 +42,6 @@ public class ContextMgmtHandler {
     
     
     private final Vertx vertx;
-    private final ObjectMapper mapper = new ObjectMapper();
-
-    // The message box to send internal messages to the ContextManagement Verticle implementing the Context Service
     private final ContextMessageBox contextMessageBox;
 
     // List of ContextStreams that are being managed by the Context Management service
@@ -47,12 +58,68 @@ public class ContextMgmtHandler {
     }
 
     /**
-     * Method to handle a request to retrieve the context service representation of an Yggdrasil environment.
-     * @param context: the Vert.x routing context of the request
+     * Method to handle a request to retrieve the static context graph managed by the Context Management Service.
+     * 
+     * @param context The Vert.x routing context of the request
      */
-    public void handleContextServiceRepresentation(RoutingContext context) {
+    public void handleStaticContextRetrieval(RoutingContext context) {
+        LOGGER.info("Handling Static Context retrieval action...");
+        
+        this.contextMessageBox.sendMessage(new ContextMessage.GetStaticContext())
+            .onSuccess(r -> {
+                LOGGER.info("Static Context retrieved successfully");
+                context.response()
+                    .setStatusCode(200)
+                    .putHeader("Content-Type", "text/turtle")
+                    .end(r.body().toString());
+            })
+            .onFailure(t -> {
+                LOGGER.error("Error retrieving Static Context", t);
+                context.response()
+                    .setStatusCode(500)
+                    .putHeader("Content-Type", "application/json")
+                    .end(new JsonObject().put("error", t.getMessage()).encode());
+            });
+    }
+
+    /**
+     * Method to handle a request to retrieve the profiled context graph managed by the Context Management Service.
+     * 
+     * @param context The Vert.x routing context of the request
+     */
+    public void handleProfiledContextRetrieval(RoutingContext context) {
+        LOGGER.info("Handling Profiled Context retrieval action...");
+        
+        // Get the context assertion type from query parameters
+        String contextAssertionType = context.request().getParam("contextAssertionType");
+        if (contextAssertionType == null || contextAssertionType.isEmpty()) {
+            LOGGER.warn("Missing or empty contextAssertionType");
+            context.response()
+                .setStatusCode(400)
+                .putHeader("Content-Type", "application/json")
+                .end(new JsonObject().put("error", "Missing required 'contextAssertionType' parameter").encode());
+            return;
+        }
+
+        this.contextMessageBox.sendMessage(new ContextMessage.GetProfiledContext(contextAssertionType))
+            .onSuccess(r -> {
+                LOGGER.info("Profiled Context retrieved successfully for type: " + contextAssertionType);
+                context.response()
+                    .setStatusCode(200)
+                    .putHeader("Content-Type", "text/turtle")
+                    .end(r.body().toString());
+            })
+            .onFailure(t -> {
+                LOGGER.error("Error retrieving Profiled Context for type: " + contextAssertionType, t);
+                context.response()
+                    .setStatusCode(500)
+                    .putHeader("Content-Type", "application/json")
+                    .end(new JsonObject().put("error", t.getMessage()).encode());
+            });
+    }
+
+    public void handleContextStreamRepresentation(RoutingContext context) {
       LOGGER.info("Handling Context Service Representation retrieval action..." + " Context: " + context);
-      // TODO: Implement the logic to retrieve the context service representation of an Yggdrasil environment
         final String streamURI = context.request().absoluteURI();
         if (streamURI == null || streamURI.isEmpty()) {
             LOGGER.warn("Missing or empty stream URI in request");
@@ -74,8 +141,251 @@ public class ContextMgmtHandler {
       
     }
 
-    public void handleGetContexts(RoutingContext context) {
-        LOGGER.info("Handling Contexts retrieval action..." + " Context: " + context);
+    /**
+     * Method to handle a request to retrieve the context service representation of an Yggdrasil environment.
+     * @param context: the Vert.x routing context of the request
+     */
+    public void handleContextServiceRepresentation(RoutingContext context) {
+      LOGGER.info("Handling Context Service Representation retrieval action...");
+
+      String baseUri = context.request().absoluteURI();
+      ThingDescription.Builder td = new ThingDescription.Builder("Context Management Service")
+          .addThingURI(baseUri + "#contextservice")
+          .addSemanticType("https://purl.org/hmas/ContextManagementService")
+          .addSecurityScheme("nosec", SecurityScheme.getNoSecurityScheme());
+          
+      // Property affordances
+      td.addAction(
+          new ActionAffordance.Builder("getStaticContext",
+              new Form.Builder(baseUri + "graphs/static")
+                  .setMethodName("GET")
+                  .setContentType("text/turtle")
+                  .build())
+              .addSemanticType("https://purl.org/hmas/StaticContextProperty")
+              .build()
+      );
+      
+      td.addAction(
+          new ActionAffordance.Builder("getProfiledAssertion",
+              new Form.Builder(baseUri + "graphs/profile")
+                  .setMethodName("GET")
+                  .setContentType("text/turtle")
+                  .build())
+              .addSemanticType("https://purl.org/hmas/ProfiledContextProperty")
+              .build()
+      );
+
+    //   Action affordances for validation
+      td.addAction(
+          new ActionAffordance.Builder("containsAssertion",
+              new Form.Builder(baseUri + "assertions/contains")
+                  .setMethodName("POST")
+                  .setContentType("application/json")
+                  .build())
+              .addSemanticType("https://purl.org/hmas/ContainsAssertionAction")
+              .addInputSchema(
+                  new ObjectSchema.Builder()
+                      .addProperty("type", new StringSchema.Builder().build())
+                      .build())
+              .build()
+      );
+      
+    //   Action affordances for managing context
+      td.addAction(
+          new ActionAffordance.Builder("addStaticContext",
+              new Form.Builder(baseUri + "graphs/static")
+                  .setMethodName("POST")
+                  .setContentType("text/turtle")
+                  .build())
+              .addSemanticType("https://purl.org/hmas/AddStaticContextAction")
+              .build()
+      );
+      
+      td.addAction(
+          new ActionAffordance.Builder("addProfiledContext",
+              new Form.Builder(baseUri + "graphs/profiled")
+                  .setMethodName("POST")
+                  .setContentType("text/turtle")
+                  .build())
+              .addSemanticType("https://purl.org/hmas/AddProfiledContextAction")
+              .build()
+      );
+      
+    //   Action affordances for context streams
+      td.addAction(
+          new ActionAffordance.Builder("addContextStream",
+              new Form.Builder(baseUri + "streams")
+                  .setMethodName("POST") 
+                  .setContentType("application/json")
+                  .build())
+              .addSemanticType("https://purl.org/hmas/AddContextStreamAction")
+              .addInputSchema(
+                  new ObjectSchema.Builder()
+                      .addProperty("streamURI", new StringSchema.Builder().build())
+                      .addProperty("streamConfig", new ObjectSchema.Builder().build())
+                      .build())
+              .build()
+      );
+      
+      td.addAction(
+          new ActionAffordance.Builder("removeContextStream",
+              new Form.Builder(baseUri + "streams")
+                  .setMethodName("DELETE")
+                  .build())
+              .addSemanticType("https://purl.org/hmas/RemoveContextStreamAction")
+              .addUriVariable("streamURI", new StringSchema.Builder().build())
+              .build()
+      );
+      
+        //   Action affordances for context domains
+        td.addAction(
+            new ActionAffordance.Builder("addContextDomain",
+                new Form.Builder(baseUri + "domains")
+                    .setMethodName("POST")
+                    .setContentType("application/json")
+                    .build())
+                .addSemanticType("https://purl.org/hmas/AddContextDomainAction")
+                .addInputSchema(
+                    new ObjectSchema.Builder()
+                        .addProperty("domainURI", new StringSchema.Builder().build())
+                        .addProperty("membershipRules", new ArraySchema.Builder().build())
+                        .build())
+                .build()
+        );
+      
+      td.addAction(
+          new ActionAffordance.Builder("removeContextDomain",
+              new Form.Builder(baseUri + "domains")
+                  .setMethodName("DELETE")
+                  .build())
+              .addSemanticType("https://purl.org/hmas/RemoveContextDomainAction")
+              .addUriVariable("domainURI", new StringSchema.Builder().build())
+              .build()
+      );
+      
+      td.addAction(
+          new ActionAffordance.Builder("addMembershipRule",
+              new Form.Builder(baseUri + "domains/{domainURI}/rules")
+                  .setMethodName("POST")
+                  .setContentType("application/json")
+                  .build())
+              .addSemanticType("https://purl.org/hmas/AddMembershipRuleAction")
+              .addUriVariable("domainURI", new StringSchema.Builder().build())
+              .addInputSchema(
+                  new ObjectSchema.Builder()
+                      .addProperty("ruleContent", new StringSchema.Builder().build())
+                      .build())
+              .build()
+      );
+      
+      td.addAction(
+          new ActionAffordance.Builder("removeMembershipRule",
+              new Form.Builder(baseUri + "domains/rules")
+                  .setMethodName("DELETE")
+                  .build())
+              .addSemanticType("https://purl.org/hmas/RemoveMembershipRuleAction") 
+              .addUriVariable("domainURI", new StringSchema.Builder().build())
+              .addUriVariable("ruleID", new StringSchema.Builder().build())
+              .build()
+      );
+
+      td.addAction(
+          new ActionAffordance.Builder("validateContextBasedAccess", 
+              new Form.Builder(baseUri + "access/validate")
+                  .setMethodName("POST")
+                  .setContentType("application/json")
+                  .build())
+              .addSemanticType("https://purl.org/hmas/ValidateContextBasedAccessAction")
+              .addInputSchema(
+                  new ObjectSchema.Builder()
+                      .addProperty("accessRequesterURI", new StringSchema.Builder().build())
+                      .addProperty("accessedResourceURI", new StringSchema.Builder().build())
+                      .build())
+              .build()
+      );
+
+      td.addAction(
+          new ActionAffordance.Builder("updateContextStream",
+              new Form.Builder(baseUri + "streams/updates")
+                  .setMethodName("POST")
+                  .setContentType("application/json")
+                  .build())
+              .addSemanticType("https://purl.org/hmas/UpdateContextStreamAction")
+              .addInputSchema(
+                  new ObjectSchema.Builder()
+                      .addProperty("streamURI", new StringSchema.Builder().build())
+                      .addProperty("streamContent", new StringSchema.Builder().build())
+                      .addProperty("updateTimestamp", new NumberSchema.Builder().build())
+                      .build())
+              .build()
+      );
+
+      // Add RDF metadata about context management
+      Model serviceMetadata = new LinkedHashModel();
+      IRI serviceIri = RdfModelUtils.createIri(baseUri + "#contextservice");
+      
+      // Link to context streams
+      for (String streamURI : managedContextStreamURIs) {
+          serviceMetadata.add(
+              serviceIri,
+              RdfModelUtils.createIri("https://purl.org/hmas/hasContextStream"),
+              RdfModelUtils.createIri(streamURI)
+          );
+      }
+
+      // Link to context domains
+      List<String> contextDomainURIs = vertx.sharedData()
+          .<String, ContextManagementConfig>getLocalMap("context-management-config")
+          .get("default")
+          .getContextDomains()
+          .stream()
+          .map(ContextDomainModel::getDomainUri)
+          .toList();
+
+      for (String domainURI : contextDomainURIs) {
+          serviceMetadata.add(
+              serviceIri,
+              RdfModelUtils.createIri("https://purl.org/hmas/hasContextDomain"), 
+              RdfModelUtils.createIri(domainURI)
+          );
+      }
+
+      // Add metadata
+      td.addGraph(serviceMetadata);
+      
+      // Add profile metadata
+      Model profileModel = new LinkedHashModel();
+      profileModel.add(
+          serviceIri,
+          RdfModelUtils.createIri("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
+          RdfModelUtils.createIri("https://purl.org/hmas/ResourceProfile")
+      );
+      profileModel.add(
+          serviceIri, 
+          RdfModelUtils.createIri("https://purl.org/hmas/isProfileOf"),
+          RdfModelUtils.createIri(baseUri)
+      );
+      td.addGraph(profileModel);
+
+      // Serialize TD with proper namespaces
+      String serializedTD = new TDGraphWriter(td.build())
+          .setNamespace("td", "https://www.w3.org/2019/wot/td#")
+          .setNamespace("htv", "http://www.w3.org/2011/http#") 
+          .setNamespace("hctl", "https://www.w3.org/2019/wot/hypermedia#")
+          .setNamespace("wotsec", "https://www.w3.org/2019/wot/security#")
+          .setNamespace("js", "https://www.w3.org/2019/wot/json-schema#")
+          .setNamespace("hmas", "https://purl.org/hmas/")
+          .setNamespace("websub", "https://purl.org/hmas/websub/")
+          .write();
+      
+      context.response()
+          .setStatusCode(200)
+          .putHeader("Content-Type", "application/td+json")
+          .end(serializedTD);
+    }
+
+    public void handleGetContextDomain(RoutingContext context) {
+        LOGGER.info("Handling Context Domain retrieval action..." + " Context: " + context);
         final String contextURI = context.request().absoluteURI();
         if (contextURI == null || contextURI.isEmpty()) {
             LOGGER.warn("Context URI is missing or empty");
@@ -222,5 +532,55 @@ public class ContextMgmtHandler {
             return matcher.group(1);
         }
         return null;
+    }
+
+    /**
+     * Method to handle a request to validate if the Context Management service maintains instances 
+     * of a given ContextAssertion type in both static and profiled context repositories.
+     * 
+     * @param context The Vert.x routing context of the request
+     */
+    public void handleContainsAssertion(RoutingContext context) {
+        LOGGER.info("Handling ContainsAssertion validation action...");
+        
+        // Get the request body as JSON
+        JsonObject requestBody = context.body().asJsonObject();
+        if (requestBody == null) {
+            LOGGER.warn("Missing request body for containsAssertion");
+            context.response()
+                .setStatusCode(400)
+                .putHeader("Content-Type", "application/json")
+                .end(new JsonObject().put("error", "Missing request body").encode());
+            return;
+        }
+        
+        // Get the context assertion type from the request body
+        String contextAssertionType = requestBody.getString("type");
+        if (contextAssertionType == null || contextAssertionType.isEmpty()) {
+            LOGGER.warn("Missing or empty context assertion type parameter");
+            context.response()
+                .setStatusCode(400)
+                .putHeader("Content-Type", "application/json")
+                .end(new JsonObject().put("error", "Missing required 'type' parameter").encode());
+            return;
+        }
+
+        this.contextMessageBox.sendMessage(new ContextMessage.ContainsAssertion(contextAssertionType))
+            .onSuccess(r -> {
+                LOGGER.info("ContainsAssertion validation completed for type: " + contextAssertionType);
+
+                JsonObject result = new JsonObject(r.body().toString());
+                context.response()
+                    .setStatusCode(200)
+                    .putHeader("Content-Type", "application/json")
+                    .end(result.encode());
+            })
+            .onFailure(t -> {
+                LOGGER.error("Error validating ContainsAssertion for type: " + contextAssertionType, t);
+                context.response()
+                    .setStatusCode(500)
+                    .putHeader("Content-Type", "application/json")
+                    .end(new JsonObject().put("error", t.getMessage()).encode());
+            });
     }
 }

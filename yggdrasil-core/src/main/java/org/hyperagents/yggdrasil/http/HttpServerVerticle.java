@@ -103,7 +103,8 @@ public class HttpServerVerticle extends AbstractVerticle {
         this.vertx,
         httpConfig,
         environmentConfig,
-        notificationConfig
+        notificationConfig,
+        this.wacConfig
     );
 
 

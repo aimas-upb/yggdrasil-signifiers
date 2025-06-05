@@ -34,9 +34,7 @@
               "blue"
             ],
             "focused-by" : ["alex_agent"],
-            "representation": "/home/pasca/Desktop/yggdrasil-signifiers/yggdrasil-context/src/test/resources/td/light308_auth_artifact_td.ttl",
-            "access-policy-url": 
-              "file:///home/pasca/Desktop/yggdrasil-signifiers/yggdrasil-context/src/test/resources/context/upb-hmas-context-access-condition-shapes.ttl"
+            "representation": "/home/pasca/Desktop/yggdrasil-signifiers/yggdrasil-context/src/test/resources/td/light308_auth_artifact_td.ttl"
           }
         ],
         "joined-by" : ["alex_agent"]
@@ -78,6 +76,12 @@
     ]
   },
   "wac": {
-    "enabled": true
+    "enabled": true,
+    "workspace-policies": [
+      {
+        "workspace-uri": "http://localhost:8080/workspaces/lab308#workspace",
+        "policy-url": "file:///home/pasca/Desktop/yggdrasil-signifiers/yggdrasil-context/src/test/resources/context/workspace-deny-write-policy.ttl"
+      }
+    ]
   }
 }

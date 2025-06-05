@@ -37,7 +37,7 @@ public enum AuthorizationAccessType {
     // method to get the AuthorizationAccessType from its name, retuned as an optional
     public static Optional<AuthorizationAccessType> fromName(String name) {
         for (AuthorizationAccessType type : AuthorizationAccessType.values()) {
-            if (type.getName().equals(name)) {
+            if (type.getName().equalsIgnoreCase(name)) {
                 return Optional.of(type);
             }
         }

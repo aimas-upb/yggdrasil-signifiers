@@ -27,13 +27,16 @@ import org.hyperagents.yggdrasil.eventbus.messageboxes.CartagoMessagebox;
 import org.hyperagents.yggdrasil.eventbus.messageboxes.HttpNotificationDispatcherMessagebox;
 import org.hyperagents.yggdrasil.eventbus.messageboxes.Messagebox;
 import org.hyperagents.yggdrasil.eventbus.messageboxes.RdfStoreMessagebox;
+import org.hyperagents.yggdrasil.eventbus.messageboxes.WACMessageBox;
 import org.hyperagents.yggdrasil.eventbus.messages.CartagoMessage;
 import org.hyperagents.yggdrasil.eventbus.messages.HttpNotificationDispatcherMessage;
 import org.hyperagents.yggdrasil.eventbus.messages.RdfStoreMessage;
+import org.hyperagents.yggdrasil.eventbus.messages.WACMessage;
 import org.hyperagents.yggdrasil.utils.EnvironmentConfig;
 import org.hyperagents.yggdrasil.utils.HttpInterfaceConfig;
 import org.hyperagents.yggdrasil.utils.RdfModelUtils;
 import org.hyperagents.yggdrasil.utils.RepresentationFactory;
+import org.hyperagents.yggdrasil.utils.WACConfig;
 import org.hyperagents.yggdrasil.utils.WebSubConfig;
 import org.hyperagents.yggdrasil.utils.impl.RepresentationFactoryFactory;
 
@@ -68,6 +71,7 @@ public class HttpEntityHandler implements HttpEntityHandlerInterface {
   private final Messagebox<CartagoMessage> cartagoMessagebox;
   private final Messagebox<RdfStoreMessage> rdfStoreMessagebox;
   private final Messagebox<HttpNotificationDispatcherMessage> notificationMessagebox;
+  private final Messagebox<WACMessage> wacMessagebox;
   private final HttpInterfaceConfig httpConfig;
   private final WebSubConfig notificationConfig;
   private final RepresentationFactory representationFactory;
@@ -81,12 +85,14 @@ public class HttpEntityHandler implements HttpEntityHandlerInterface {
    * @param httpConfig         httpConfig
    * @param environmentConfig  environmentConfig
    * @param notificationConfig notificationConfig
+   * @param wacConfig          wacConfig
    */
   public HttpEntityHandler(
       final Vertx vertx,
       final HttpInterfaceConfig httpConfig,
       final EnvironmentConfig environmentConfig,
-      final WebSubConfig notificationConfig
+      final WebSubConfig notificationConfig,
+      final WACConfig wacConfig
   ) {
     this.httpConfig = httpConfig;
     this.notificationConfig = notificationConfig;
@@ -97,6 +103,7 @@ public class HttpEntityHandler implements HttpEntityHandlerInterface {
     this.rdfStoreMessagebox = new RdfStoreMessagebox(vertx.eventBus());
     this.notificationMessagebox =
         new HttpNotificationDispatcherMessagebox(vertx.eventBus(), this.notificationConfig);
+    this.wacMessagebox = new WACMessageBox(vertx.eventBus(), wacConfig);
 
     // Should be able to use this boolean value to decide if we use cartago messages or not
     // that way the router does not need to check for routes itself
@@ -210,29 +217,42 @@ public class HttpEntityHandler implements HttpEntityHandlerInterface {
   public void handleCreateArtifact(final RoutingContext context) {
     final var agentId = context.request().getHeader(AGENT_WEBID_HEADER);
     if (agentId == null) {
-      context.response().setStatusCode(HttpStatus.SC_UNAUTHORIZED).end();
-      return;
+        context.response().setStatusCode(HttpStatus.SC_UNAUTHORIZED).end();
+        return;
     }
     final var contentType = context.request().getHeader(HttpHeaders.CONTENT_TYPE);
 
     if (contentType == null) {
-      context.response().setStatusCode(HttpStatus.SC_BAD_REQUEST).end();
-      return;
+        context.response().setStatusCode(HttpStatus.SC_BAD_REQUEST).end();
+        return;
     }
 
     this.rdfStoreMessagebox.sendMessage(
             new RdfStoreMessage.GetEntity(this.httpConfig
                 .getWorkspaceUri(context.pathParam(WORKSPACE_ID_PARAM)))
-        ).onSuccess(
-            r -> {
-              switch (contentType) {
-                case "application/json" -> handleCreateArtifactJson(context, agentId);
-                case TURTLE_CONTENT_TYPE -> handleCreateArtifactTurtle(context);
-                default ->
-                    context.response().setStatusCode(HttpStatus.SC_UNSUPPORTED_MEDIA_TYPE).end();
-              }
-            }
-        ).onFailure(
+        ).onSuccess(r -> {
+            final var artifactsURI = context.request().absoluteURI();
+            
+            this.wacMessagebox.sendMessage(
+                new WACMessage.AuthorizeAccess(artifactsURI, agentId, "WRITE")
+            ).onSuccess(authorized -> {
+                if (authorized.body().equals(true)) {
+                    // Authorization granted - proceed with artifact creation
+                    switch (contentType) {
+                        case "application/json" -> handleCreateArtifactJson(context, agentId);
+                        case TURTLE_CONTENT_TYPE -> handleCreateArtifactTurtle(context);
+                        default ->
+                            context.response().setStatusCode(HttpStatus.SC_UNSUPPORTED_MEDIA_TYPE).end();
+                    }
+                } else {
+                    // Authorization denied
+                    context.response().setStatusCode(HttpStatus.SC_FORBIDDEN).end();
+                }
+            }).onFailure(t -> {
+                // WAC authorization failed
+                context.response().setStatusCode(HttpStatus.SC_FORBIDDEN).end();
+            });
+        }).onFailure(
             r -> context.response().setStatusCode(HttpStatus.SC_BAD_REQUEST).end()
     );
   }

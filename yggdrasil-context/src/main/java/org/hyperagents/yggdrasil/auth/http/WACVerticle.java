@@ -254,58 +254,72 @@ public class WACVerticle extends AbstractVerticle {
         }
         AuthorizationAccessType accessType = accessTypeOpt.get();
         
-        LOGGER.info("=== WAC AUTHORIZATION REQUEST ===");
+        LOGGER.info("=== WAC VERTICLE AUTHORIZATION VALIDATION ===");
         LOGGER.info("Agent URI: " + agentURI);
         LOGGER.info("Accessed Resource URI: " + accessedResourceUri);
         LOGGER.info("Access Type: " + accessType);
-        LOGGER.info("=================================");
+        LOGGER.info("Starting WAC effective authorization determination protocol...");
+        LOGGER.info("============================================");
         
         AuthorizationRegistry authorizationRegistry = AuthorizationRegistry.getInstance();
         
         // Step 1: Check for direct authorization on the resource
         boolean hasDirectAuth = authorizationRegistry.hasAccessAuthorization(accessedResourceUri, accessType);
-        LOGGER.info("Direct authorization check for " + accessedResourceUri + " (type: " + accessType + "): " + hasDirectAuth);
+        LOGGER.info("STEP 1: Direct authorization check");
+        LOGGER.info("Checking resource: " + accessedResourceUri);
+        LOGGER.info("For access type: " + accessType);
+        LOGGER.info("Direct authorization found: " + hasDirectAuth);
         
         if (hasDirectAuth) {
             LOGGER.info("DIRECT authorization found for resource " + accessedResourceUri);
+            LOGGER.info("Proceeding with context-based validation...");
             
             contextMessageBox.sendMessage(new ContextMessage.ValidateContextBasedAccess(agentURI, accessedResourceUri))
                 .onSuccess(r -> {
                     LOGGER.info("Direct authorization validation SUCCEEDED for " + agentURI);
+                    LOGGER.info("FINAL RESULT: ACCESS GRANTED (direct authorization)");
                     message.reply(true);
                 })
                 .onFailure(t -> {
                     LOGGER.error("Direct authorization validation FAILED for " + agentURI, t);
+                    LOGGER.info("FINAL RESULT: ACCESS DENIED (context validation failed)");
                     message.fail(403, "Authorization validation failed");
                 });
             return;
         }
         
         LOGGER.info("No direct authorization found. Starting WAC hierarchy traversal...");
+        LOGGER.info("STEP 2: WAC Effective ACL Resource Determination");
         
         // Step 2: WAC Hierarchy - Check for default policies in parent containers
         String effectiveACLResource = findEffectiveACLResource(accessedResourceUri, authorizationRegistry, accessType);
         
-        LOGGER.info("WAC hierarchy result: effectiveACLResource = " + effectiveACLResource);
+        LOGGER.info("WAC hierarchy traversal completed");
+        LOGGER.info("Effective ACL resource result: " + (effectiveACLResource != null ? effectiveACLResource : "NONE"));
         
         if (effectiveACLResource != null) {
             LOGGER.info("FOUND effective ACL resource: " + effectiveACLResource + " for " + accessedResourceUri);
+            LOGGER.info("Proceeding with inherited authorization context validation...");
             
             contextMessageBox.sendMessage(new ContextMessage.ValidateContextBasedAccess(agentURI, effectiveACLResource))
                 .onSuccess(r -> {
                     LOGGER.info("Workspace/container authorization GRANTED for " + accessedResourceUri + " via " + effectiveACLResource);
+                    LOGGER.info("FINAL RESULT: ACCESS GRANTED (inherited from workspace)");
                     message.reply(true);
                 })
                 .onFailure(t -> {
                     LOGGER.error("Workspace/container authorization DENIED for " + accessedResourceUri + " via " + effectiveACLResource, t);
+                    LOGGER.info("FINAL RESULT: ACCESS DENIED (inherited context validation failed)");
                     message.fail(403, "Container access denied");
                 });
             return;
         }
         
         // Step 3: No authorization found anywhere in hierarchy - default deny (WAC security policy)
+        LOGGER.info("STEP 3: Default deny behavior");
         LOGGER.info("NO authorization found in hierarchy for " + accessedResourceUri + ". DENYING access (WAC default policy).");
         LOGGER.info("WAC security policy: Access denied when no explicit authorization is found");
+        LOGGER.info("FINAL RESULT: ACCESS DENIED (no authorization in containment hierarchy)");
         message.fail(403, "Access denied: No authorization found in containment hierarchy");
     }
 
@@ -314,36 +328,65 @@ public class WACVerticle extends AbstractVerticle {
      * Traverses the containment hierarchy to find effective authorization
      */
     private String findEffectiveACLResource(String resourceURI, AuthorizationRegistry authorizationRegistry, AuthorizationAccessType requestedAccessType) {
-        LOGGER.info("findEffectiveACLResource called with: " + resourceURI + " (access type: " + requestedAccessType + ")");
+        LOGGER.info("=== WAC EFFECTIVE ACL RESOURCE DETERMINATION ===");
+        LOGGER.info("Starting WAC hierarchy traversal for resource: " + resourceURI);
+        LOGGER.info("Requested access type: " + requestedAccessType);
+        LOGGER.info("Following WAC containment hierarchy protocol...");
         
         // For artifacts, check parent workspace
         if (resourceURI.contains("/artifacts/")) {
+            LOGGER.info("Resource is an ARTIFACT - checking parent workspace");
+            
             // Extract workspace URI from artifact URI
             String workspaceURI = resourceURI.substring(0, resourceURI.indexOf("/artifacts/")) + "#workspace";
             
-            LOGGER.info("Extracted workspace URI: " + workspaceURI);
-            LOGGER.info("Checking parent workspace for access type: " + requestedAccessType);
+            LOGGER.info("Extracted parent workspace URI: " + workspaceURI);
+            LOGGER.info("Checking workspace authorization registry...");
             
             // Check if the workspace has authorization for the specific access type being requested
             boolean hasRequestedAuth = authorizationRegistry.hasAccessAuthorization(workspaceURI, requestedAccessType);
             
+            LOGGER.info("Workspace contains authorization policy: " + authorizationRegistry.hasAccessAuthorization(workspaceURI));
             LOGGER.info("Workspace authorization for " + requestedAccessType + ": " + hasRequestedAuth);
             
             if (hasRequestedAuth) {
-                LOGGER.info("Found workspace authorization for " + requestedAccessType + " - returning: " + workspaceURI);
+                LOGGER.info("✓ SUCCESS: Found workspace authorization for " + requestedAccessType);
+                LOGGER.info("Effective ACL resource determined: " + workspaceURI);
+                LOGGER.info("WAC hierarchy traversal: ARTIFACT → WORKSPACE (found)");
+                LOGGER.info("===============================================");
                 return workspaceURI;
             } else {
-                LOGGER.info("No workspace authorization found for " + requestedAccessType + " on: " + workspaceURI);
+                LOGGER.info("✗ No workspace authorization found for " + requestedAccessType + " on: " + workspaceURI);
+                LOGGER.info("Checking for parent workspace hierarchy...");
+                
+                // TODO: Add support for subworkspace hierarchy traversal here
+                // For now, we only check direct parent workspace
+                LOGGER.info("TODO: Subworkspace hierarchy traversal not yet implemented");
+                LOGGER.info("Current implementation: ARTIFACT → WORKSPACE only");
             }
             
-            // TODO: Add support for subworkspace hierarchy traversal here
-            // For now, we only check direct parent workspace
-            
         } else {
-            LOGGER.info("Resource is not an artifact (no /artifacts/ in URI): " + resourceURI);
+            LOGGER.info("Resource is NOT an artifact (no /artifacts/ in URI): " + resourceURI);
+            LOGGER.info("Checking if resource is a workspace...");
+            
+            if (resourceURI.contains("#workspace")) {
+                LOGGER.info("Resource is a WORKSPACE - checking direct authorization");
+                boolean hasWorkspaceAuth = authorizationRegistry.hasAccessAuthorization(resourceURI, requestedAccessType);
+                LOGGER.info("Direct workspace authorization for " + requestedAccessType + ": " + hasWorkspaceAuth);
+                
+                if (hasWorkspaceAuth) {
+                    LOGGER.info("✓ SUCCESS: Found direct workspace authorization");
+                    LOGGER.info("Effective ACL resource: " + resourceURI + " (self)");
+                    LOGGER.info("===============================================");
+                    return resourceURI;
+                }
+            }
         }
         
-        LOGGER.info("No effective ACL resource found, returning null");
+        LOGGER.info("✗ FAILURE: No effective ACL resource found in containment hierarchy");
+        LOGGER.info("WAC hierarchy traversal completed with no authorization found");
+        LOGGER.info("Returning null (will trigger default deny behavior)");
+        LOGGER.info("===============================================");
         return null; // No effective ACL resource found
     }
 }

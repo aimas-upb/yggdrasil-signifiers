@@ -217,44 +217,174 @@ public class HttpEntityHandler implements HttpEntityHandlerInterface {
   public void handleCreateArtifact(final RoutingContext context) {
     final var agentId = context.request().getHeader(AGENT_WEBID_HEADER);
     if (agentId == null) {
+        LOGGER.info("=== ARTIFACT CREATION REQUEST ===");
+        LOGGER.info("DENIED: Missing X-Agent-WebID header");
+        LOGGER.info("Returning HTTP 401 Unauthorized");
+        LOGGER.info("================================");
         context.response().setStatusCode(HttpStatus.SC_UNAUTHORIZED).end();
         return;
     }
     final var contentType = context.request().getHeader(HttpHeaders.CONTENT_TYPE);
 
     if (contentType == null) {
+        LOGGER.info("=== ARTIFACT CREATION REQUEST ===");
+        LOGGER.info("DENIED: Missing Content-Type header");
+        LOGGER.info("Agent: " + agentId);
+        LOGGER.info("Returning HTTP 400 Bad Request");
+        LOGGER.info("================================");
         context.response().setStatusCode(HttpStatus.SC_BAD_REQUEST).end();
         return;
     }
+
+    LOGGER.info("=== ARTIFACT CREATION REQUEST ===");
+    LOGGER.info("Agent WebID: " + agentId);
+    LOGGER.info("Content-Type: " + contentType);
+    LOGGER.info("Workspace: " + context.pathParam(WORKSPACE_ID_PARAM));
+    LOGGER.info("Request URI: " + context.request().absoluteURI());
+    LOGGER.info("Request Method: " + context.request().method());
+    LOGGER.info("Checking if workspace exists...");
 
     this.rdfStoreMessagebox.sendMessage(
             new RdfStoreMessage.GetEntity(this.httpConfig
                 .getWorkspaceUri(context.pathParam(WORKSPACE_ID_PARAM)))
         ).onSuccess(r -> {
-            final var artifactsURI = context.request().absoluteURI();
+            LOGGER.info("Workspace exists - proceeding with hierarchical WAC authorization check");
+            final var artifactsURI = this.httpConfig.getArtifactsUri(context.pathParam(WORKSPACE_ID_PARAM));
             
+            LOGGER.info("STEP 1: Requesting WAC authorization for artifact-level access...");
+            LOGGER.info("Target artifacts URI: " + artifactsURI);
+            LOGGER.info("Access type required: WRITE");
+            
+            // First try artifact-level authorization
             this.wacMessagebox.sendMessage(
                 new WACMessage.AuthorizeAccess(artifactsURI, agentId, "WRITE")
             ).onSuccess(authorized -> {
-                if (authorized.body().equals(true)) {
-                    // Authorization granted - proceed with artifact creation
-                    switch (contentType) {
-                        case "application/json" -> handleCreateArtifactJson(context, agentId);
-                        case TURTLE_CONTENT_TYPE -> handleCreateArtifactTurtle(context);
-                        default ->
-                            context.response().setStatusCode(HttpStatus.SC_UNSUPPORTED_MEDIA_TYPE).end();
-                    }
+                boolean isAuthorized = extractAuthorizationResult(authorized.body());
+                if (isAuthorized) {
+                    LOGGER.info("WAC AUTHORIZATION: GRANTED (ARTIFACT LEVEL)");
+                    LOGGER.info("Found artifact-level authorization - proceeding with artifact creation...");
+                    LOGGER.info("Content-Type: " + contentType);
+                    
+                    // Authorization granted at artifact level - proceed with artifact creation
+                    proceedWithArtifactCreation(context, agentId, contentType);
                 } else {
-                    // Authorization denied
-                    context.response().setStatusCode(HttpStatus.SC_FORBIDDEN).end();
+                    LOGGER.info("WAC AUTHORIZATION: DENIED (ARTIFACT LEVEL)");
+                    LOGGER.info("No artifact-level authorization found - checking workspace level...");
+                    
+                    // Artifact-level authorization failed, try workspace level
+                    final var workspaceURI = this.httpConfig.getWorkspaceUri(context.pathParam(WORKSPACE_ID_PARAM)) + "#workspace";
+                    
+                    LOGGER.info("STEP 2: Requesting WAC authorization for workspace-level access...");
+                    LOGGER.info("Target workspace URI: " + workspaceURI);
+                    LOGGER.info("Access type required: WRITE");
+                    
+                    this.wacMessagebox.sendMessage(
+                        new WACMessage.AuthorizeAccess(workspaceURI, agentId, "WRITE")
+                    ).onSuccess(workspaceAuthorized -> {
+                        boolean isWorkspaceAuthorized = extractAuthorizationResult(workspaceAuthorized.body());
+                        if (isWorkspaceAuthorized) {
+                            LOGGER.info("WAC AUTHORIZATION: GRANTED (WORKSPACE LEVEL)");
+                            LOGGER.info("Found workspace-level authorization - proceeding with artifact creation...");
+                            LOGGER.info("Content-Type: " + contentType);
+                            
+                            // Authorization granted at workspace level - proceed with artifact creation
+                            proceedWithArtifactCreation(context, agentId, contentType);
+                        } else {
+                            LOGGER.info("WAC AUTHORIZATION: DENIED (WORKSPACE LEVEL)");
+                            LOGGER.info("Agent " + agentId + " not authorized at artifact or workspace level");
+                            LOGGER.info("Returning HTTP 403 Forbidden");
+                            LOGGER.info("================================");
+                            context.response().setStatusCode(HttpStatus.SC_FORBIDDEN).end();
+                        }
+                    }).onFailure(t -> {
+                        LOGGER.error("WAC AUTHORIZATION: FAILED (WORKSPACE LEVEL)");
+                        LOGGER.error("Workspace authorization check failed with error: " + t.getMessage());
+                        LOGGER.info("Returning HTTP 403 Forbidden");
+                        LOGGER.info("================================");
+                        context.response().setStatusCode(HttpStatus.SC_FORBIDDEN).end();
+                    });
                 }
             }).onFailure(t -> {
-                // WAC authorization failed
-                context.response().setStatusCode(HttpStatus.SC_FORBIDDEN).end();
+                LOGGER.error("WAC AUTHORIZATION: FAILED (ARTIFACT LEVEL)");
+                LOGGER.error("Artifact authorization check failed with error: " + t.getMessage());
+                LOGGER.info("Attempting workspace-level fallback...");
+                
+                // Artifact-level check failed, try workspace level as fallback
+                final var workspaceURI = this.httpConfig.getWorkspaceUri(context.pathParam(WORKSPACE_ID_PARAM)) + "#workspace";
+                
+                LOGGER.info("STEP 2: Requesting WAC authorization for workspace-level access (fallback)...");
+                LOGGER.info("Target workspace URI: " + workspaceURI);
+                
+                this.wacMessagebox.sendMessage(
+                    new WACMessage.AuthorizeAccess(workspaceURI, agentId, "WRITE")
+                ).onSuccess(workspaceAuthorized -> {
+                    boolean isWorkspaceAuthorized = extractAuthorizationResult(workspaceAuthorized.body());
+                    if (isWorkspaceAuthorized) {
+                        LOGGER.info("WAC AUTHORIZATION: GRANTED (WORKSPACE LEVEL - FALLBACK)");
+                        LOGGER.info("Found workspace-level authorization after artifact failure - proceeding...");
+                        proceedWithArtifactCreation(context, agentId, contentType);
+                    } else {
+                        LOGGER.info("WAC AUTHORIZATION: DENIED (BOTH LEVELS)");
+                        LOGGER.info("Authorization failed at both artifact and workspace levels");
+                        LOGGER.info("Returning HTTP 403 Forbidden");
+                        LOGGER.info("================================");
+                        context.response().setStatusCode(HttpStatus.SC_FORBIDDEN).end();
+                    }
+                }).onFailure(fallbackError -> {
+                    LOGGER.error("WAC AUTHORIZATION: FAILED (BOTH LEVELS)");
+                    LOGGER.error("Both artifact and workspace authorization checks failed");
+                    LOGGER.error("Original artifact error: " + t.getMessage());
+                    LOGGER.error("Workspace fallback error: " + fallbackError.getMessage());
+                    LOGGER.info("Returning HTTP 403 Forbidden");
+                    LOGGER.info("================================");
+                    context.response().setStatusCode(HttpStatus.SC_FORBIDDEN).end();
+                });
             });
         }).onFailure(
             r -> context.response().setStatusCode(HttpStatus.SC_BAD_REQUEST).end()
-    );
+        );
+  }
+
+  /**
+   * Helper method to safely extract boolean value from WAC authorization response.
+   * The WAC system sometimes returns Boolean objects and sometimes String representations.
+   *
+   * @param messageBody the message body from WAC response
+   * @return true if authorized, false otherwise
+   */
+  private boolean extractAuthorizationResult(Object messageBody) {
+    if (messageBody instanceof Boolean) {
+      return (Boolean) messageBody;
+    } else if (messageBody instanceof String) {
+      return Boolean.parseBoolean((String) messageBody);
+    } else {
+      LOGGER.warn("Unexpected WAC response type: " + messageBody.getClass().getSimpleName() + " with value: " + messageBody);
+      return false; // Default to deny for safety
+    }
+  }
+
+  /**
+   * Helper method to proceed with artifact creation after authorization is granted.
+   *
+   * @param context     routingContext
+   * @param agentId     agent WebID
+   * @param contentType content type of the request
+   */
+  private void proceedWithArtifactCreation(final RoutingContext context, final String agentId, final String contentType) {
+    switch (contentType) {
+      case "application/json" -> {
+        LOGGER.info("Creating JSON artifact...");
+        handleCreateArtifactJson(context, agentId);
+      }
+      case TURTLE_CONTENT_TYPE -> {
+        LOGGER.info("Creating Turtle artifact...");
+        handleCreateArtifactTurtle(context);
+      }
+      default -> {
+        LOGGER.info("Unsupported media type: " + contentType);
+        context.response().setStatusCode(HttpStatus.SC_UNSUPPORTED_MEDIA_TYPE).end();
+      }
+    }
   }
 
   /**

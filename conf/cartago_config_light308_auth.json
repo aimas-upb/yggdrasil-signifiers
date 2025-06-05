@@ -80,7 +80,7 @@
     "workspace-policies": [
       {
         "workspace-uri": "http://localhost:8080/workspaces/lab308#workspace",
-        "policy-url": "file:///home/pasca/Desktop/yggdrasil-signifiers/yggdrasil-context/src/test/resources/context/workspace-deny-write-policy.ttl"
+        "policy-url": "file:///home/pasca/Desktop/yggdrasil-signifiers/yggdrasil-context/src/test/resources/context/workspace-allow-write-policy.ttl"
       }
     ]
   }

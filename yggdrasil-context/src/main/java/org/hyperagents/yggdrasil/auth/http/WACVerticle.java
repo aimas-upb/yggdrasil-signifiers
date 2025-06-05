@@ -3,8 +3,10 @@ package org.hyperagents.yggdrasil.auth.http;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.MalformedURLException;
+import java.net.URI;
 import java.net.URL;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.http.HttpStatus;
 import org.apache.logging.log4j.LogManager;
@@ -77,16 +79,20 @@ public class WACVerticle extends AbstractVerticle {
             .<String, HttpInterfaceConfig>getLocalMap("http-config")
             .get("default");
         
+        this.contextMessageBox = new ContextMessageBox(this.vertx.eventBus(), contextManagementConfig);
+        
+        this.wacMessageBox = new WACMessageBox(this.vertx.eventBus(), wacConfig);
+        this.wacMessageBox.init();
+        
         // populate the Authorization Registry with initial artifacts for in the environment for which an authorization policy is defined
         setupAuthorizationRegistry(environment, httpConfig);
+        
+        // Load workspace policies from WAC config
+        loadWorkspacePolicies(wacConfig);
 
         // setup message handling 
-        this.contextMessageBox = new ContextMessageBox(vertx.eventBus(), contextManagementConfig);
-
-        this.wacMessageBox = new WACMessageBox(vertx.eventBus(), wacConfig);
-        this.wacMessageBox.init();
         setupRequestHandling();
-
+        
         startPromise.complete();
     }
 
@@ -152,6 +158,32 @@ public class WACVerticle extends AbstractVerticle {
                 );
             }
         );
+    }
+
+    private void loadWorkspacePolicies(WACConfig wacConfig) {
+        AuthorizationRegistry authorizationRegistry = AuthorizationRegistry.getInstance();
+        
+        for (Map.Entry<String, String> entry : wacConfig.getWorkspacePolicies().entrySet()) {
+            String workspaceUri = entry.getKey();
+            String policyFile = entry.getValue();
+            
+            try {
+                URL url = URI.create(policyFile).toURL();
+                try (InputStream inputStream = url.openStream()) {
+                    Model contextAuthModel = Rio.parse(inputStream, "", RDFFormat.TURTLE);
+                    
+                    // populate the Authorization Registry with the workspace authorization policy
+                    List<ContextBasedAuthorization> authPolicies = ContextBasedAuthorization.fromModel(contextAuthModel);
+                    authPolicies.forEach(authPolicy -> {
+                        authorizationRegistry.addContextAuthorisation(workspaceUri, authPolicy);
+                    });
+                    
+                    LOGGER.info("Loaded workspace policy for {}: {}", workspaceUri, policyFile);
+                }
+            } catch (Exception e) {
+                LOGGER.error("Failed to load workspace policy for {}: {}", workspaceUri, policyFile, e);
+            }
+        }
     }
 
     private void setupRequestHandling() {
@@ -229,8 +261,10 @@ public class WACVerticle extends AbstractVerticle {
         
         LOGGER.info("Validating Authorization for agent " + agentURI + " to access resource " + accessedResourceUri + " in mode " + accessType);
         
-        // Use the authorization registry to check if the authorization exists
+        // DEBUG: Check what's actually in the registry
         AuthorizationRegistry authorizationRegistry = AuthorizationRegistry.getInstance();
+        LOGGER.info("DEBUG: Looking for authorizations for resource: {}", accessedResourceUri);
+        
         if (!authorizationRegistry.hasAccessAuthorization(accessedResourceUri, accessType)) {
             LOGGER.info("Authorization not found for agent " + agentURI + " to access resource " + accessedResourceUri + " in mode " + accessType + ". Resource is public.");   
             message.reply(true);

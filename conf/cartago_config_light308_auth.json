@@ -78,6 +78,12 @@
     ]
   },
   "wac": {
-    "enabled": true
+    "enabled": true,
+    "workspace-policies": [
+      {
+        "workspace-uri": "http://localhost:8080/workspaces/lab308#workspace",
+        "policy-file": "file:///home/pasca/Desktop/yggdrasil-signifiers/yggdrasil-context/src/test/resources/context/lab308-deny-all.ttl"
+      }
+    ]
   }
 }

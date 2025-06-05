@@ -356,6 +356,10 @@ public class ContextMgmtVerticle extends AbstractVerticle {
                             LOGGER.info("Handling Context-based access validation action...");
                             validateContextBasedAccess(msgContent.accessRequesterURI(), msgContent.accessedResourceURI(), message);
                         }
+                        case ContextMessage.ValidateWorkspaceContextBasedAccess msgContent -> {
+                            LOGGER.info("Handling Workspace Context-based access validation action...");
+                            validateWorkspaceContextBasedAccess(msgContent.accessRequesterURI(), msgContent.accessedWorkspaceURI(), message);
+                        }
                         case ContextMessage.GetStaticContext msgContent -> {
                             LOGGER.info("Handling GetStaticContext action...");
                             message.reply(staticContextRepo.getConnection().getStatements(null, null, null, false));

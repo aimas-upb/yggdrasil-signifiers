@@ -29,7 +29,8 @@ enum MessageFields {
   CONTEXT_ASSERTION_TYPE("contextAssertionType"),
   STREAM_URI("streamURI"),
   STREAM_UPDATE_CONTENT("streamUpdateContent"),
-  STREAM_UPDATE_TIMESTAMP("streamUpdateTimestamp");
+  STREAM_UPDATE_TIMESTAMP("streamUpdateTimestamp"),
+  RDF_CONTENT("rdfContent");
 
 
   private static final String PREFIX = "org.hyperagents.yggdrasil.eventbus.fields.";

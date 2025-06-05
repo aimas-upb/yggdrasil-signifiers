@@ -3,6 +3,7 @@ package org.hyperagents.yggdrasil.context.http;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.StringReader;
 import java.io.UncheckedIOException;
 import java.net.MalformedURLException;
 import java.net.URI;
@@ -28,6 +29,7 @@ import org.apache.logging.log4j.Logger;
 import org.eclipse.rdf4j.common.exception.ValidationException;
 import org.eclipse.rdf4j.common.iteration.Iterations;
 import org.eclipse.rdf4j.model.IRI;
+import org.eclipse.rdf4j.model.Model;
 import org.eclipse.rdf4j.model.Resource;
 import org.eclipse.rdf4j.model.Statement;
 import org.eclipse.rdf4j.model.Value;
@@ -477,6 +479,64 @@ public class ContextMgmtVerticle extends AbstractVerticle {
                         case ContextMessage.ContextStreamUpdate streamUpdate -> {
                             LOGGER.info("Received request to update context stream: " + streamUpdate.streamURI());  
                             updateContextStream(streamUpdate.streamURI(), streamUpdate.updateContent(), streamUpdate.updateTimestamp(), message);
+                        }
+                        case ContextMessage.AddStaticContext addStaticContext -> {
+                            LOGGER.info("Handling AddStaticContext request");
+                            try {
+                                Model model = Rio.parse(new StringReader(addStaticContext.rdfContent()), "", RDFFormat.TURTLE);
+                                
+                                try (RepositoryConnection conn = staticContextRepo.getConnection()) {
+                                    conn.begin();
+                                    conn.add(model);
+                                    conn.commit();
+                                    
+                                    int statementCount = model.size();
+                                    LOGGER.info("Successfully added {} statements to static context repository", statementCount);
+                                    message.reply(String.valueOf(statementCount));
+                                }
+                                
+                            } catch (RDFParseException e) {
+                                LOGGER.error("Error parsing RDF content", e);
+                                message.fail(HttpStatus.SC_BAD_REQUEST, 
+                                    "Invalid RDF content: " + e.getMessage());
+                            } catch (RepositoryException e) {
+                                LOGGER.error("Error adding RDF content to static context repository", e);
+                                message.fail(HttpStatus.SC_INTERNAL_SERVER_ERROR, 
+                                    "Error adding content to repository: " + e.getMessage());
+                            } catch (Exception e) {
+                                LOGGER.error("Unexpected error adding static context", e);
+                                message.fail(HttpStatus.SC_INTERNAL_SERVER_ERROR, 
+                                    "Unexpected error: " + e.getMessage());
+                            }
+                        }
+                        case ContextMessage.AddProfiledContext addProfiledContext -> {
+                            LOGGER.info("Handling AddProfiledContext request");
+                            try {
+                                Model model = Rio.parse(new StringReader(addProfiledContext.rdfContent()), "", RDFFormat.TURTLE);
+                                
+                                try (RepositoryConnection conn = profiledContextRepo.getConnection()) {
+                                    conn.begin();
+                                    conn.add(model);
+                                    conn.commit();
+                                    
+                                    int statementCount = model.size();
+                                    LOGGER.info("Successfully added {} statements to profiled context repository", statementCount);
+                                    message.reply(String.valueOf(statementCount));
+                                }
+                                
+                            } catch (RDFParseException e) {
+                                LOGGER.error("Error parsing RDF content", e);
+                                message.fail(HttpStatus.SC_BAD_REQUEST, 
+                                    "Invalid RDF content: " + e.getMessage());
+                            } catch (RepositoryException e) {
+                                LOGGER.error("Error adding RDF content to profiled context repository", e);
+                                message.fail(HttpStatus.SC_INTERNAL_SERVER_ERROR, 
+                                    "Error adding content to repository: " + e.getMessage());
+                            } catch (Exception e) {
+                                LOGGER.error("Unexpected error adding profiled context", e);
+                                message.fail(HttpStatus.SC_INTERNAL_SERVER_ERROR, 
+                                    "Unexpected error: " + e.getMessage());
+                            }
                         }
                         default -> {
                             LOGGER.warn("Received an unknown message type: " + message.body().getClass().getName());

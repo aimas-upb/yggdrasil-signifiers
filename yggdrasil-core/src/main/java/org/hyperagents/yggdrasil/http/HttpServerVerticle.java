@@ -218,8 +218,16 @@ public class HttpServerVerticle extends AbstractVerticle {
     final Route staticContext = router.get("/context/graphs/static")
         .handler(contextHandler::handleStaticContextRetrieval);
 
+    final Route addStaticContext = router.post("/context/graphs/static")
+        .consumes(TURTLE_CONTENT_TYPE)
+        .handler(contextHandler::handleAddStaticContext);
+
     final Route profiledContext = router.get("/context/graphs/profiled")
         .handler(contextHandler::handleProfiledContextRetrieval);
+
+    final Route addProfiledContext = router.post("/context/graphs/profiled")
+        .consumes(TURTLE_CONTENT_TYPE)
+        .handler(contextHandler::handleAddProfiledContext);
 
     final Route contextDomainRepresentation = router.get(CONTEXT_DOMAIN_PATH)
         .handler(contextHandler::handleGetContextDomain);
@@ -245,6 +253,10 @@ public class HttpServerVerticle extends AbstractVerticle {
       contextStreamRepresentation.disable();
       contextDomainRepresentation.disable();
       containsAssertionRoute.disable();
+      staticContext.disable();
+      addStaticContext.disable();
+      profiledContext.disable();
+      addProfiledContext.disable();
     }
 
     router.get("/query").handler(handler::handleQuery);

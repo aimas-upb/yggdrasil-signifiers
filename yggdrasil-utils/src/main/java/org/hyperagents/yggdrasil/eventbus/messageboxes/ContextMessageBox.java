@@ -63,6 +63,18 @@ public class ContextMessageBox implements Messagebox<ContextMessage> {
                 ContextMessage.ContainsAssertion.class,
                 new GenericMessageCodec<>(ContextMessage.ContainsAssertion.class, new ContextManagementMessageMarshaller())
             );
+            
+            // Register the message handler for adding static context
+            this.eventBus.registerDefaultCodec(
+                ContextMessage.AddStaticContext.class,
+                new GenericMessageCodec<>(ContextMessage.AddStaticContext.class, new ContextManagementMessageMarshaller())
+            );
+            
+            // Register the message handler for adding profiled context
+            this.eventBus.registerDefaultCodec(
+                ContextMessage.AddProfiledContext.class,
+                new GenericMessageCodec<>(ContextMessage.AddProfiledContext.class, new ContextManagementMessageMarshaller())
+            );
         }
         else {
             LOGGER.warn("Context Management is not enabled. The context message exchange will not be initialized.");

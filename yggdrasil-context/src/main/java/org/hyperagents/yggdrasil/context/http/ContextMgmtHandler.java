@@ -140,7 +140,7 @@ public class ContextMgmtHandler {
             });
       
     }
-
+    
     /**
      * Method to handle a request to retrieve the context service representation of an Yggdrasil environment.
      * @param context: the Vert.x routing context of the request
@@ -149,6 +149,10 @@ public class ContextMgmtHandler {
       LOGGER.info("Handling Context Service Representation retrieval action...");
 
       String baseUri = context.request().absoluteURI();
+      if (baseUri.endsWith("/")) {
+          baseUri = baseUri.substring(0, baseUri.length() - 1);
+      }
+
       ThingDescription.Builder td = new ThingDescription.Builder("Context Management Service")
           .addThingURI(baseUri + "#contextservice")
           .addSemanticType("https://purl.org/hmas/ContextManagementService")
@@ -157,7 +161,7 @@ public class ContextMgmtHandler {
       // Property affordances
       td.addAction(
           new ActionAffordance.Builder("getStaticContext",
-              new Form.Builder(baseUri + "graphs/static")
+              new Form.Builder(baseUri + "/graphs/static")
                   .setMethodName("GET")
                   .setContentType("text/turtle")
                   .build())
@@ -167,7 +171,7 @@ public class ContextMgmtHandler {
       
       td.addAction(
           new ActionAffordance.Builder("getProfiledAssertion",
-              new Form.Builder(baseUri + "graphs/profile")
+              new Form.Builder(baseUri + "/graphs/profile")
                   .setMethodName("GET")
                   .setContentType("text/turtle")
                   .build())
@@ -178,7 +182,7 @@ public class ContextMgmtHandler {
     //   Action affordances for validation
       td.addAction(
           new ActionAffordance.Builder("containsAssertion",
-              new Form.Builder(baseUri + "assertions/contains")
+              new Form.Builder(baseUri + "/assertions/contains")
                   .setMethodName("POST")
                   .setContentType("application/json")
                   .build())
@@ -193,7 +197,7 @@ public class ContextMgmtHandler {
     //   Action affordances for managing context
       td.addAction(
           new ActionAffordance.Builder("addStaticContext",
-              new Form.Builder(baseUri + "graphs/static")
+              new Form.Builder(baseUri + "/graphs/static")
                   .setMethodName("POST")
                   .setContentType("text/turtle")
                   .build())
@@ -203,7 +207,7 @@ public class ContextMgmtHandler {
       
       td.addAction(
           new ActionAffordance.Builder("addProfiledContext",
-              new Form.Builder(baseUri + "graphs/profiled")
+              new Form.Builder(baseUri + "/graphs/profiled")
                   .setMethodName("POST")
                   .setContentType("text/turtle")
                   .build())
@@ -214,7 +218,7 @@ public class ContextMgmtHandler {
     //   Action affordances for context streams
       td.addAction(
           new ActionAffordance.Builder("addContextStream",
-              new Form.Builder(baseUri + "streams")
+              new Form.Builder(baseUri + "/streams")
                   .setMethodName("POST") 
                   .setContentType("application/json")
                   .build())
@@ -229,7 +233,7 @@ public class ContextMgmtHandler {
       
       td.addAction(
           new ActionAffordance.Builder("removeContextStream",
-              new Form.Builder(baseUri + "streams")
+              new Form.Builder(baseUri + "/streams")
                   .setMethodName("DELETE")
                   .build())
               .addSemanticType("https://purl.org/hmas/RemoveContextStreamAction")
@@ -240,7 +244,7 @@ public class ContextMgmtHandler {
         //   Action affordances for context domains
         td.addAction(
             new ActionAffordance.Builder("addContextDomain",
-                new Form.Builder(baseUri + "domains")
+                new Form.Builder(baseUri + "/domains")
                     .setMethodName("POST")
                     .setContentType("application/json")
                     .build())
@@ -255,7 +259,7 @@ public class ContextMgmtHandler {
       
       td.addAction(
           new ActionAffordance.Builder("removeContextDomain",
-              new Form.Builder(baseUri + "domains")
+              new Form.Builder(baseUri + "/domains")
                   .setMethodName("DELETE")
                   .build())
               .addSemanticType("https://purl.org/hmas/RemoveContextDomainAction")
@@ -265,7 +269,7 @@ public class ContextMgmtHandler {
       
       td.addAction(
           new ActionAffordance.Builder("addMembershipRule",
-              new Form.Builder(baseUri + "domains/{domainURI}/rules")
+              new Form.Builder(baseUri + "/domains/{domainURI}/rules")
                   .setMethodName("POST")
                   .setContentType("application/json")
                   .build())
@@ -280,7 +284,7 @@ public class ContextMgmtHandler {
       
       td.addAction(
           new ActionAffordance.Builder("removeMembershipRule",
-              new Form.Builder(baseUri + "domains/rules")
+              new Form.Builder(baseUri + "/domains/rules")
                   .setMethodName("DELETE")
                   .build())
               .addSemanticType("https://purl.org/hmas/RemoveMembershipRuleAction") 
@@ -291,7 +295,7 @@ public class ContextMgmtHandler {
 
       td.addAction(
           new ActionAffordance.Builder("validateContextBasedAccess", 
-              new Form.Builder(baseUri + "access/validate")
+              new Form.Builder(baseUri + "/access/validate")
                   .setMethodName("POST")
                   .setContentType("application/json")
                   .build())
@@ -306,7 +310,7 @@ public class ContextMgmtHandler {
 
       td.addAction(
           new ActionAffordance.Builder("updateContextStream",
-              new Form.Builder(baseUri + "streams/updates")
+              new Form.Builder(baseUri + "/streams/updates")
                   .setMethodName("POST")
                   .setContentType("application/json")
                   .build())
@@ -577,6 +581,107 @@ public class ContextMgmtHandler {
             })
             .onFailure(t -> {
                 LOGGER.error("Error validating ContainsAssertion for type: " + contextAssertionType, t);
+                context.response()
+                    .setStatusCode(500)
+                    .putHeader("Content-Type", "application/json")
+                    .end(new JsonObject().put("error", t.getMessage()).encode());
+            });
+    }
+
+    /**
+     * Method to handle a request to add RDF data to the static context repository.
+     * The request body should contain RDF data in Turtle format.
+     * 
+     * @param context The Vert.x routing context of the request
+     */
+    public void handleAddStaticContext(RoutingContext context) {
+        LOGGER.info("Handling AddStaticContext action...");
+        
+        // Get the request body as string (expecting Turtle RDF)
+        String rdfContent = context.body().asString();
+        if (rdfContent == null || rdfContent.trim().isEmpty()) {
+            LOGGER.warn("Missing or empty RDF content in request body");
+            context.response()
+                .setStatusCode(400)
+                .putHeader("Content-Type", "application/json")
+                .end(new JsonObject().put("error", "Missing or empty RDF content in request body").encode());
+            return;
+        }
+
+        // Validate that the content-type is text/turtle
+        String contentType = context.request().getHeader("Content-Type");
+        if (contentType == null || !contentType.toLowerCase().contains("text/turtle")) {
+            LOGGER.warn("Invalid content type. Expected 'text/turtle', got: " + contentType);
+            context.response()
+                .setStatusCode(400)
+                .putHeader("Content-Type", "application/json")
+                .end(new JsonObject().put("error", "Invalid content type. Expected 'text/turtle'").encode());
+            return;
+        }
+
+        this.contextMessageBox.sendMessage(new ContextMessage.AddStaticContext(rdfContent))
+            .onSuccess(r -> {
+                LOGGER.info("Static context added successfully");
+                context.response()
+                    .setStatusCode(201)
+                    .putHeader("Content-Type", "application/json")
+                    .end(new JsonObject()
+                        .put("message", "Static context added successfully")
+                        .put("addedStatements", r.body().toString())
+                        .encode());
+            })
+            .onFailure(t -> {
+                LOGGER.error("Error adding static context", t);
+                context.response()
+                    .setStatusCode(500)
+                    .putHeader("Content-Type", "application/json")
+                    .end(new JsonObject().put("error", t.getMessage()).encode());
+            });
+    }
+
+    /**
+     * Method to handle a request to add RDF data to the profiled context repository.
+     * The request body should contain RDF data in Turtle format with profiled ContextAssertions,
+     * ContextAnnotations, and ContextEntities.
+     * 
+     * @param context The Vert.x routing context of the request
+     */
+    public void handleAddProfiledContext(RoutingContext context) {
+        LOGGER.info("Handling AddProfiledContext action...");
+        
+        String rdfContent = context.body().asString();
+        if (rdfContent == null || rdfContent.trim().isEmpty()) {
+            LOGGER.warn("Missing or empty RDF content in request body");
+            context.response()
+                .setStatusCode(400)
+                .putHeader("Content-Type", "application/json")
+                .end(new JsonObject().put("error", "Missing or empty RDF content in request body").encode());
+            return;
+        }
+
+        String contentType = context.request().getHeader("Content-Type");
+        if (contentType == null || !contentType.toLowerCase().contains("text/turtle")) {
+            LOGGER.warn("Invalid content type for addProfiledContext. Expected 'text/turtle', got: " + contentType);
+            context.response()
+                .setStatusCode(400)
+                .putHeader("Content-Type", "application/json")
+                .end(new JsonObject().put("error", "Invalid content type. Expected 'text/turtle'").encode());
+            return;
+        }
+
+        this.contextMessageBox.sendMessage(new ContextMessage.AddProfiledContext(rdfContent))
+            .onSuccess(r -> {
+                LOGGER.info("Profiled context added successfully");
+                context.response()
+                    .setStatusCode(201)
+                    .putHeader("Content-Type", "application/json")
+                    .end(new JsonObject()
+                        .put("message", "Profiled context added successfully")
+                        .put("addedStatements", r.body().toString())
+                        .encode());
+            })
+            .onFailure(t -> {
+                LOGGER.error("Error adding profiled context", t);
                 context.response()
                     .setStatusCode(500)
                     .putHeader("Content-Type", "application/json")

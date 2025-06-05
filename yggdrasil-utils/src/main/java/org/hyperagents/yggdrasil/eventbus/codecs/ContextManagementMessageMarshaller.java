@@ -47,6 +47,12 @@ public class ContextManagementMessageMarshaller
             case CONTAINS_ASSERTION -> new ContextMessage.ContainsAssertion(
                 jsonObject.get(MessageFields.CONTEXT_ASSERTION_TYPE.getName()).getAsString()
             );
+            case ADD_STATIC_CONTEXT -> new ContextMessage.AddStaticContext(
+                jsonObject.get(MessageFields.RDF_CONTENT.getName()).getAsString()
+            );
+            case ADD_PROFILED_CONTEXT -> new ContextMessage.AddProfiledContext(
+                jsonObject.get(MessageFields.RDF_CONTENT.getName()).getAsString()
+            );
             default -> throw new JsonParseException("The request method is not valid");
         };
     }
@@ -87,6 +93,14 @@ public class ContextManagementMessageMarshaller
             case ContextMessage.VerifyContextStreamSubscription verifyContextStreamSubscription -> {
                 jsonObject.addProperty(MessageFields.REQUEST_METHOD.getName(), MessageRequestMethods.CONTEXT_STREAM_VERIFY_SUBSCRIPTION.getName());
                 jsonObject.addProperty(MessageFields.STREAM_URI.getName(), verifyContextStreamSubscription.streamURI());
+            }
+            case ContextMessage.AddStaticContext addStaticContext -> {
+                jsonObject.addProperty(MessageFields.REQUEST_METHOD.getName(), MessageRequestMethods.ADD_STATIC_CONTEXT.getName());
+                jsonObject.addProperty(MessageFields.RDF_CONTENT.getName(), addStaticContext.rdfContent());
+            }
+            case ContextMessage.AddProfiledContext addProfiledContext -> {
+                jsonObject.addProperty(MessageFields.REQUEST_METHOD.getName(), MessageRequestMethods.ADD_PROFILED_CONTEXT.getName());
+                jsonObject.addProperty(MessageFields.RDF_CONTENT.getName(), addProfiledContext.rdfContent());
             }
         }
 

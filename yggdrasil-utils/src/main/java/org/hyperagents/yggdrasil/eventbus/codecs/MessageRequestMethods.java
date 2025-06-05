@@ -26,6 +26,8 @@ enum MessageRequestMethods {
   VALIDATE_CONTEXT_BASED_ACCESS("validateContextBasedAccess"),
   GET_STATIC_CONTEXT("getStaticContext"),
   GET_PROFILED_CONTEXT("getProfiledContext"),
+  ADD_STATIC_CONTEXT("addStaticContext"),
+  ADD_PROFILED_CONTEXT("addProfiledContext"),
   CONTEXT_STREAM_VERIFY_SUBSCRIPTION("contextStreamVerifySubscription"),
   CONTEXT_STREAM_UPDATE("contextStreamUpdate"),
   GET_CONTEXT_STREAM_REPRESENTATION("getContextStreamRepresentation"),

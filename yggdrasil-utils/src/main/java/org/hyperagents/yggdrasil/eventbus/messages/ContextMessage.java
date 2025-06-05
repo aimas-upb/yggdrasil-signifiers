@@ -84,4 +84,29 @@ public sealed interface ContextMessage {
      */
     record ContainsAssertion(String contextAssertionType) implements ContextMessage {
     }
+
+    /**
+     * A record representing a request to add RDF data to the static context repository.
+     * 
+     * <p> The rdfContent contains the RDF data in Turtle format to be added to the static context graph.
+     * This is typically used to add ContextAssertions and ContextEntities that represent static, 
+     * unchanging contextual information.
+     * 
+     * @param rdfContent The RDF content in Turtle format to add to the static context repository.
+     */
+    record AddStaticContext(String rdfContent) implements ContextMessage {
+    }
+
+    /**
+     * A record representing a request to add RDF data to the profiled context repository.
+     * 
+     * <p> The rdfContent contains the RDF data in Turtle format to be added to the profiled context graph.
+     * This is typically used to add profiled ContextAssertions with their ContextAnnotations and 
+     * ContextEntities that represent contextual information with temporal, spatial, or other 
+     * qualifying characteristics.
+     * 
+     * @param rdfContent The RDF content in Turtle format to add to the profiled context repository.
+     */
+    record AddProfiledContext(String rdfContent) implements ContextMessage {
+    }
 }

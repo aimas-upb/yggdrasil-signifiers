@@ -3,8 +3,10 @@ package org.hyperagents.yggdrasil.auth.http;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.MalformedURLException;
+import java.net.URI;
 import java.net.URL;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.http.HttpStatus;
 import org.apache.logging.log4j.LogManager;
@@ -77,16 +79,20 @@ public class WACVerticle extends AbstractVerticle {
             .<String, HttpInterfaceConfig>getLocalMap("http-config")
             .get("default");
         
+        this.contextMessageBox = new ContextMessageBox(this.vertx.eventBus(), contextManagementConfig);
+        
+        this.wacMessageBox = new WACMessageBox(this.vertx.eventBus(), wacConfig);
+        this.wacMessageBox.init();
+        
         // populate the Authorization Registry with initial artifacts for in the environment for which an authorization policy is defined
         setupAuthorizationRegistry(environment, httpConfig);
+        
+        // Load workspace policies from WAC config
+        loadWorkspacePolicies(wacConfig);
 
         // setup message handling 
-        this.contextMessageBox = new ContextMessageBox(vertx.eventBus(), contextManagementConfig);
-
-        this.wacMessageBox = new WACMessageBox(vertx.eventBus(), wacConfig);
-        this.wacMessageBox.init();
         setupRequestHandling();
-
+        
         startPromise.complete();
     }
 
@@ -100,32 +106,84 @@ public class WACVerticle extends AbstractVerticle {
         // This implies walking up the workspace hierarchy to get the effective access policy PER REQUEST TYPE that would exist in the absence of any explicit 
         // access policy. This would be useful for performance reasons, as it would avoid having to compute the effective access policy for each request.
         environment.getWorkspaces().forEach(
-            workspace -> workspace.getArtifacts().forEach(
-                artifact -> {
-                    if (artifact.getRepresentation().isPresent()) {
-                        try {
-                            // read the authorization specification from the RDF representation file path, if it exists
-                            var representationPath = artifact.getRepresentation().get();
-                            URL url = representationPath.toUri().toURL();
-                            try (InputStream inputStream = url.openStream()) {
-                                Model contextAuthModel = Rio.parse(inputStream, "", RDFFormat.TURTLE);
-                                
-                                // populate the Authorization Registry with the authorization policy
-                                List<ContextBasedAuthorization> authPolicies = ContextBasedAuthorization.fromModel(contextAuthModel);
-                                authPolicies.forEach(authPolicy -> {
-                                    authorizationRegistry.addContextAuthorisation(authPolicy.getResourceURI(), authPolicy);
-                                });
+            workspace -> {
+                // Handle workspace-level authorizations
+                if (workspace.getRepresentation().isPresent()) {
+                    try {
+                        var representationPath = workspace.getRepresentation().get();
+                        URL url = representationPath.toUri().toURL();
+                        try (InputStream inputStream = url.openStream()) {
+                            Model contextAuthModel = Rio.parse(inputStream, "", RDFFormat.TURTLE);
+                            
+                            // populate the Authorization Registry with the workspace authorization policy
+                            List<ContextBasedAuthorization> authPolicies = ContextBasedAuthorization.fromModel(contextAuthModel);
+                            String workspaceURI = httpConfig.getWorkspaceUri(workspace.getName()) + "#workspace";
+                            authPolicies.forEach(authPolicy -> {
+                                authorizationRegistry.addContextAuthorisation(workspaceURI, authPolicy);
+                            });
 
-                            } catch (Exception e) {
-                                LOGGER.error("Failed to read RDF model from URL: " + url, e);
-                            }
-                        } catch (MalformedURLException ex) {
-                            LOGGER.error("Invalid URI syntax for the artifact access policy URL: " + artifact.getContextAccessPolicyURL().get(), ex);
+                        } catch (Exception e) {
+                            LOGGER.error("Failed to read RDF model from URL: " + url, e);
                         }
+                    } catch (MalformedURLException ex) {
+                        LOGGER.error("Invalid URI syntax for the workspace access policy URL: " + workspace.getRepresentation().get(), ex);
                     }
                 }
-            )
+                
+                // Handle artifact-level authorizations (existing code)
+                workspace.getArtifacts().forEach(
+                    artifact -> {
+                        if (artifact.getRepresentation().isPresent()) {
+                            try {
+                                // read the authorization specification from the RDF representation file path, if it exists
+                                var representationPath = artifact.getRepresentation().get();
+                                URL url = representationPath.toUri().toURL();
+                                try (InputStream inputStream = url.openStream()) {
+                                    Model contextAuthModel = Rio.parse(inputStream, "", RDFFormat.TURTLE);
+                                    
+                                    // populate the Authorization Registry with the authorization policy
+                                    List<ContextBasedAuthorization> authPolicies = ContextBasedAuthorization.fromModel(contextAuthModel);
+                                    authPolicies.forEach(authPolicy -> {
+                                        authorizationRegistry.addContextAuthorisation(authPolicy.getResourceURI(), authPolicy);
+                                    });
+
+                                } catch (Exception e) {
+                                    LOGGER.error("Failed to read RDF model from URL: " + url, e);
+                                }
+                            } catch (MalformedURLException ex) {
+                                LOGGER.error("Invalid URI syntax for the artifact access policy URL: " + artifact.getContextAccessPolicyURL().get(), ex);
+                            }
+                        }
+                    }
+                );
+            }
         );
+    }
+
+    private void loadWorkspacePolicies(WACConfig wacConfig) {
+        AuthorizationRegistry authorizationRegistry = AuthorizationRegistry.getInstance();
+        
+        for (Map.Entry<String, String> entry : wacConfig.getWorkspacePolicies().entrySet()) {
+            String workspaceUri = entry.getKey();
+            String policyFile = entry.getValue();
+            
+            try {
+                URL url = URI.create(policyFile).toURL();
+                try (InputStream inputStream = url.openStream()) {
+                    Model contextAuthModel = Rio.parse(inputStream, "", RDFFormat.TURTLE);
+                    
+                    // populate the Authorization Registry with the workspace authorization policy
+                    List<ContextBasedAuthorization> authPolicies = ContextBasedAuthorization.fromModel(contextAuthModel);
+                    authPolicies.forEach(authPolicy -> {
+                        authorizationRegistry.addContextAuthorisation(workspaceUri, authPolicy);
+                    });
+                    
+                    LOGGER.info("Loaded workspace policy for {}: {}", workspaceUri, policyFile);
+                }
+            } catch (Exception e) {
+                LOGGER.error("Failed to load workspace policy for {}: {}", workspaceUri, policyFile, e);
+            }
+        }
     }
 
     private void setupRequestHandling() {
@@ -203,24 +261,39 @@ public class WACVerticle extends AbstractVerticle {
         
         LOGGER.info("Validating Authorization for agent " + agentURI + " to access resource " + accessedResourceUri + " in mode " + accessType);
         
-        // Use the authorization registry to check if the authorization exists; if there isn't an authorization, return by default an OK response,
-        // because it means that the resource is public
+        // DEBUG: Check what's actually in the registry
         AuthorizationRegistry authorizationRegistry = AuthorizationRegistry.getInstance();
+        LOGGER.info("DEBUG: Looking for authorizations for resource: {}", accessedResourceUri);
+        
         if (!authorizationRegistry.hasAccessAuthorization(accessedResourceUri, accessType)) {
             LOGGER.info("Authorization not found for agent " + agentURI + " to access resource " + accessedResourceUri + " in mode " + accessType + ". Resource is public.");   
             message.reply(true);
             return;
         }
         
-        // forward a call to the Context Management Verticle to validate the authorization
-        contextMessageBox.sendMessage(new ContextMessage.ValidateContextBasedAccess(agentURI, accessedResourceUri))
-            .onSuccess(r -> {
-                LOGGER.info("Authorization validated for agent " + agentURI + " to access resource " + accessedResourceUri + " in mode " + accessType);
-                message.reply(true);
-            })
-            .onFailure(t -> {
-                LOGGER.error("Error validating authorization for agent " + agentURI + " to access resource " + accessedResourceUri + " in mode " + accessType, t);
-                message.fail(403, "Authorization validation failed");
-            });
+        // Determine if this is a workspace or artifact based on the URI
+        if (accessedResourceUri.contains("#workspace")) {
+            // Forward to Context Management Verticle for workspace validation
+            contextMessageBox.sendMessage(new ContextMessage.ValidateWorkspaceContextBasedAccess(agentURI, accessedResourceUri))
+                .onSuccess(r -> {
+                    LOGGER.info("Workspace authorization validated for agent " + agentURI + " to access resource " + accessedResourceUri + " in mode " + accessType);
+                    message.reply(true);
+                })
+                .onFailure(t -> {
+                    LOGGER.error("Error validating workspace authorization for agent " + agentURI + " to access resource " + accessedResourceUri + " in mode " + accessType, t);
+                    message.fail(403, "Authorization validation failed");
+                });
+        } else {
+            // Forward to Context Management Verticle for artifact validation (existing logic)
+            contextMessageBox.sendMessage(new ContextMessage.ValidateContextBasedAccess(agentURI, accessedResourceUri))
+                .onSuccess(r -> {
+                    LOGGER.info("Authorization validated for agent " + agentURI + " to access resource " + accessedResourceUri + " in mode " + accessType);
+                    message.reply(true);
+                })
+                .onFailure(t -> {
+                    LOGGER.error("Error validating authorization for agent " + agentURI + " to access resource " + accessedResourceUri + " in mode " + accessType, t);
+                    message.fail(403, "Authorization validation failed");
+                });
+        }
     }
 }

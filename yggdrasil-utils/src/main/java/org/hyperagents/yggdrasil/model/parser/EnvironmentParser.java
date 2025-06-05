@@ -288,7 +288,8 @@ public final class EnvironmentParser {
                   ));
                 })
                 .collect(Collectors.toSet()),
-              JsonObjectUtils.getString(w, "representation", LOGGER::error).orElse(null)
+              JsonObjectUtils.getString(w, "representation", LOGGER::error).orElse(null),
+              JsonObjectUtils.getString(w, "contextAccessPolicyURL", LOGGER::error).orElse(null)  // Add this line
             ));
           })
           .toList()

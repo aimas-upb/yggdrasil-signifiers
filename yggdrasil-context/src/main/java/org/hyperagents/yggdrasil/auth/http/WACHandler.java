@@ -171,4 +171,53 @@ public class WACHandler {
       });
 
   }
+
+  /**
+   * This method is invoked by the Yggdrasil HTTP server to filter access to workspace operations
+   * @param routingContext the routing context
+   */
+  public void filterWorkspaceAccess(RoutingContext routingContext) {
+    // first, consider if the wacConfig is enabled
+    if (!wacConfig.isEnabled()) {
+      LOGGER.info("WAC is disabled. Skipping Workspace Authorization validation.");
+      routingContext.next();
+      return;
+    }
+
+    // Extract workspace name from the request path
+    String requestPath = routingContext.request().path();
+    String workspaceName = extractWorkspaceNameFromPath(requestPath);
+    String workspaceIRI = httpConfig.getWorkspaceUri(workspaceName) + "#workspace";
+
+    // obtain the agent's web id from the request header
+    String agentURI = routingContext.request().getHeader("X-Agent-WebID");
+
+    LOGGER.info("Handling Workspace Authorization validation for workspace with URI: " + workspaceIRI 
+      + " invoked by agent with WebID: " + agentURI);
+    
+    // send an AuthorizeAccess request to the WAC Verticle using the wacMessagebox
+    this.wacMessagebox
+      .sendMessage(new WACMessage.AuthorizeAccess(workspaceIRI, agentURI, AuthorizationAccessType.WRITE.getName()))
+      .onSuccess(reply -> {
+        // if the access is granted, we let the request go through
+        LOGGER.info("Access to workspace with URI: " + workspaceIRI + " granted.");
+        routingContext.next();
+      })
+      .onFailure(t -> {
+        // otherwise we return an error
+        LOGGER.info("Access to workspace with URI: " + workspaceIRI + " denied.");
+        routingContext.response().setStatusCode(HttpStatus.SC_UNAUTHORIZED).end();
+      });
+  }
+
+  private String extractWorkspaceNameFromPath(String requestPath) {
+    // Extract workspace name from paths like:
+    // /workspaces/workspaceName/join
+    // /workspaces/workspaceName/artifacts
+    String[] pathSegments = requestPath.split("/");
+    if (pathSegments.length >= 3 && "workspaces".equals(pathSegments[1])) {
+      return pathSegments[2];
+    }
+    throw new IllegalArgumentException("Cannot extract workspace name from path: " + requestPath);
+  }
 }

@@ -40,6 +40,10 @@ public class ContextMessageBox implements Messagebox<ContextMessage> {
                 ContextMessage.ValidateContextBasedAccess.class,
                 new GenericMessageCodec<>(ContextMessage.ValidateContextBasedAccess.class, new ContextManagementMessageMarshaller())
             );
+            this.eventBus.registerDefaultCodec(
+                ContextMessage.ValidateWorkspaceContextBasedAccess.class,
+                new GenericMessageCodec<>(ContextMessage.ValidateWorkspaceContextBasedAccess.class, new ContextManagementMessageMarshaller())
+            );
             this.eventBus.registerDefaultCodec(ContextMessage.ContextStreamUpdate.class, 
                 new GenericMessageCodec<>(ContextMessage.ContextStreamUpdate.class, new ContextManagementMessageMarshaller()));
             this.eventBus.registerDefaultCodec(ContextMessage.VerifyContextStreamSubscription.class, 

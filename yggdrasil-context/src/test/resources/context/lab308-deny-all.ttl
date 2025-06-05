@@ -1,0 +1,14 @@
+@prefix acl: <http://www.w3.org/ns/auth/acl#> .
+@prefix cashmere: <https://aimas.cs.pub.ro/ont/cashmere#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+
+# CASHMERE authorization (not standard ACL!)
+<http://example.org/allowAlex> a cashmere:ContextBasedAuthorization ;
+    acl:accessTo <http://localhost:8080/workspaces/lab308#workspace> ;
+    acl:mode acl:Write ;
+    acl:agent <http://localhost:8080/agents/alex> ;
+    cashmere:hasAccessCondition <http://example.org/alwaysAllow> .
+
+# Always allow condition  
+<http://example.org/alwaysAllow> a cashmere:ContextBasedAccessCondition ;
+    sh:severity sh:Info .

@@ -235,6 +235,13 @@ public class HttpServerVerticle extends AbstractVerticle {
     final Route contextStreamRepresentation = router.get(CONTEXT_STREAM_PATH)
         .handler(contextHandler::handleContextStreamRepresentation);
 
+    final Route addContextStream = router.post("/context/streams")
+        .consumes("application/json")
+        .handler(contextHandler::handleAddContextStream);
+
+    final Route removeContextStream = router.delete("/context/streams")
+        .handler(contextHandler::handleRemoveContextStream);
+
     final Route contextStreamSubscriptionVerification = router.get("/" + ContextManagementConfig.CONTEXT_STREAMS_PATH)
         .handler(contextHandler::handleVerifyContextStreamSubscription);
     
@@ -248,9 +255,11 @@ public class HttpServerVerticle extends AbstractVerticle {
 
     // If the context management service is disabled, disable the context management routes
     if (!this.contextManagementConfig.isEnabled()) {
+      contextServiceRepresentation.disable();
       contextStreamUpdatesRoute.disable();
       contextStreamSubscriptionVerification.disable();
       contextStreamRepresentation.disable();
+      addContextStream.disable();
       contextDomainRepresentation.disable();
       containsAssertionRoute.disable();
       staticContext.disable();

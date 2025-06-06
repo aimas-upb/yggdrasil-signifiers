@@ -75,6 +75,18 @@ public class ContextMessageBox implements Messagebox<ContextMessage> {
                 ContextMessage.AddProfiledContext.class,
                 new GenericMessageCodec<>(ContextMessage.AddProfiledContext.class, new ContextManagementMessageMarshaller())
             );
+            
+            // Register the message handler for adding context stream
+            this.eventBus.registerDefaultCodec(
+                ContextMessage.AddContextStream.class,
+                new GenericMessageCodec<>(ContextMessage.AddContextStream.class, new ContextManagementMessageMarshaller())
+            );
+            
+            // Register the message handler for removing context stream
+            this.eventBus.registerDefaultCodec(
+                ContextMessage.RemoveContextStream.class,
+                new GenericMessageCodec<>(ContextMessage.RemoveContextStream.class, new ContextManagementMessageMarshaller())
+            );
         }
         else {
             LOGGER.warn("Context Management is not enabled. The context message exchange will not be initialized.");

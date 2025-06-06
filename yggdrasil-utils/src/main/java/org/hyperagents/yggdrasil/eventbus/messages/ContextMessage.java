@@ -109,4 +109,28 @@ public sealed interface ContextMessage {
      */
     record AddProfiledContext(String rdfContent) implements ContextMessage {
     }
+
+    /**
+     * A record representing a request to add and track a new ContextStream.
+     * 
+     * <p> The streamURI is the URI of the ContextStream to be added and tracked.
+     * <p> The streamConfig contains configuration details for the stream including ontology URL and assertions.
+     * This operation will register the stream with the Context Management Service and subscribe to its updates.
+     * 
+     * @param streamURI The URI of the ContextStream to add and track.
+     * @param streamConfig The configuration object containing stream details (ontology URL, assertions, etc.).
+     */
+    record AddContextStream(String streamURI, String streamConfig) implements ContextMessage {
+    }
+
+    /**
+     * A record representing a request to remove and stop tracking a ContextStream.
+     * 
+     * <p> The streamURI is the URI of the ContextStream to be removed and no longer tracked.
+     * This operation will unsubscribe from the stream's updates and remove it from the managed streams.
+     * 
+     * @param streamURI The URI of the ContextStream to remove and stop tracking.
+     */
+    record RemoveContextStream(String streamURI) implements ContextMessage {
+    }
 }

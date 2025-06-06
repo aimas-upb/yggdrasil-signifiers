@@ -28,6 +28,7 @@ enum MessageFields {
   AGENT_URI("agentURI"),
   CONTEXT_ASSERTION_TYPE("contextAssertionType"),
   STREAM_URI("streamURI"),
+  STREAM_CONFIG("streamConfig"),
   STREAM_UPDATE_CONTENT("streamUpdateContent"),
   STREAM_UPDATE_TIMESTAMP("streamUpdateTimestamp"),
   RDF_CONTENT("rdfContent");

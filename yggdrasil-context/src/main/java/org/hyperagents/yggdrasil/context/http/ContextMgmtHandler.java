@@ -119,7 +119,7 @@ public class ContextMgmtHandler {
     }
 
     public void handleContextStreamRepresentation(RoutingContext context) {
-      LOGGER.info("Handling Context Service Representation retrieval action..." + " Context: " + context);
+      LOGGER.info("Handling Context Service Representation retrieval action...");
         final String streamURI = context.request().absoluteURI();
         if (streamURI == null || streamURI.isEmpty()) {
             LOGGER.warn("Missing or empty stream URI in request");
@@ -682,6 +682,139 @@ public class ContextMgmtHandler {
             })
             .onFailure(t -> {
                 LOGGER.error("Error adding profiled context", t);
+                context.response()
+                    .setStatusCode(500)
+                    .putHeader("Content-Type", "application/json")
+                    .end(new JsonObject().put("error", t.getMessage()).encode());
+            });
+    }
+
+    /**
+     * Method to handle a request to add and track a new ContextStream.
+     * The request body should contain JSON with streamURI and streamConfig.
+     * 
+     * @param context The Vert.x routing context of the request
+     */
+    public void handleAddContextStream(RoutingContext context) {
+        LOGGER.info("Handling AddContextStream action...");
+        
+        JsonObject requestBody = context.body().asJsonObject();
+        if (requestBody == null) {
+            LOGGER.warn("Missing request body for addContextStream");
+            context.response()
+                .setStatusCode(400)
+                .putHeader("Content-Type", "application/json")
+                .end(new JsonObject().put("error", "Missing request body").encode());
+            return;
+        }
+
+        String contentType = context.request().getHeader("Content-Type");
+        if (contentType == null || !contentType.toLowerCase().contains("application/json")) {
+            LOGGER.warn("Invalid content type for addContextStream. Expected 'application/json', got: " + contentType);
+            context.response()
+                .setStatusCode(400)
+                .putHeader("Content-Type", "application/json")
+                .end(new JsonObject().put("error", "Invalid content type. Expected 'application/json'").encode());
+            return;
+        }
+
+        String streamURI = requestBody.getString("streamURI");
+        JsonObject streamConfigJson = requestBody.getJsonObject("streamConfig");
+        
+        if (streamURI == null || streamURI.trim().isEmpty()) {
+            LOGGER.warn("Missing or empty streamURI in request body");
+            context.response()
+                .setStatusCode(400)
+                .putHeader("Content-Type", "application/json")
+                .end(new JsonObject().put("error", "Missing required 'streamURI' parameter").encode());
+            return;
+        }
+
+        if (streamConfigJson == null) {
+            LOGGER.warn("Missing or empty streamConfig in request body");
+            context.response()
+                .setStatusCode(400)
+                .putHeader("Content-Type", "application/json")
+                .end(new JsonObject().put("error", "Missing required 'streamConfig' parameter").encode());
+            return;
+        }
+        String streamConfig = streamConfigJson.encode();
+
+        this.contextMessageBox.sendMessage(new ContextMessage.AddContextStream(streamURI, streamConfig))
+            .onSuccess(r -> {
+                if (!managedContextStreamURIs.contains(streamURI)) {
+                    LOGGER.info("Adding new stream URI to managed context streams: " + streamURI);
+                    managedContextStreamURIs.add(streamURI);
+                } else {
+                    LOGGER.info("Stream URI already exists in managed context streams: " + streamURI);
+                }
+                LOGGER.info("Updated managed context streams: " + managedContextStreamURIs);
+
+                context.response()
+                    .setStatusCode(201)
+                    .putHeader("Content-Type", "application/json")
+                    .end(new JsonObject()
+                        .put("message", "Context stream added and indexed successfully")
+                        .put("streamURI", streamURI)
+                        .encode());
+            })
+            .onFailure(t -> {
+                LOGGER.error("Error adding context stream", t);
+                context.response()
+                    .setStatusCode(500)
+                    .putHeader("Content-Type", "application/json")
+                    .end(new JsonObject().put("error", t.getMessage()).encode());
+            });
+    }
+    
+    /**
+     * Method to handle a request to remove a context stream from the Context Management Service.
+     * 
+     * @param context The Vert.x routing context of the request
+     */
+    public void handleRemoveContextStream(RoutingContext context) {
+        LOGGER.info("Handling RemoveContextStream action...");
+        
+        String streamURI = context.pathParam("streamid");
+        if (streamURI == null || streamURI.trim().isEmpty()) {
+            LOGGER.warn("Missing streamURI path parameter");
+            context.response()
+                .setStatusCode(400)
+                .putHeader("Content-Type", "application/json")
+                .end(new JsonObject().put("error", "Missing required 'streamURI' path parameter").encode());
+            return;
+        }
+
+        // Reconstruct full stream URI from path parameter
+        String baseUrl = context.request().absoluteURI().substring(0, 
+            context.request().absoluteURI().lastIndexOf("/context/streams/"));
+        String fullStreamURI = baseUrl + "/context/streams/" + streamURI;
+
+        if (!managedContextStreamURIs.contains(fullStreamURI)) {
+            LOGGER.warn("Stream URI is not currently managed: " + fullStreamURI);
+            context.response()
+                .setStatusCode(404)
+                .putHeader("Content-Type", "application/json")
+                .end(new JsonObject().put("error", "Context stream not found or not currently managed").encode());
+            return;
+        }
+
+        this.contextMessageBox.sendMessage(new ContextMessage.RemoveContextStream(fullStreamURI))
+            .onSuccess(r -> {
+                managedContextStreamURIs.remove(fullStreamURI);
+                LOGGER.info("Removed stream URI from managed context streams: " + fullStreamURI);
+                LOGGER.info("Updated managed context streams: " + managedContextStreamURIs);
+
+                context.response()
+                    .setStatusCode(200)
+                    .putHeader("Content-Type", "application/json")
+                    .end(new JsonObject()
+                        .put("message", "Context stream removed successfully")
+                        .put("streamURI", fullStreamURI)
+                        .encode());
+            })
+            .onFailure(t -> {
+                LOGGER.error("Error removing context stream", t);
                 context.response()
                     .setStatusCode(500)
                     .putHeader("Content-Type", "application/json")

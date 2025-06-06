@@ -283,6 +283,34 @@ public class ContextMgmtVerticle extends AbstractVerticle {
         }
     }
 
+    /**
+     * Unsubscribes from the WebSub hub for a specific stream.
+     *
+     * @param streamUri The URI of the stream to unsubscribe from
+     */
+    private void unsubscribeFromHub(HttpInterfaceConfig httpConfig, WebSubConfig webSubConfig, String streamUri) throws IOException {
+        String hubUri = webSubConfig.getWebSubHubUri();
+        String callbackUri = baseURITrailingSlash + ContextManagementConfig.STREAM_UPDATES_PATH;
+        
+        HttpClient httpClient = HttpClients.createDefault();
+        HttpPost httpPost = new HttpPost(hubUri);
+        
+        JsonObject json = new JsonObject();
+        json.put("hub.mode", "unsubscribe");
+        json.put("hub.topic", streamUri);
+        json.put("hub.callback", callbackUri);
+        StringEntity entity = new StringEntity(json.encode());
+        httpPost.setEntity(entity);
+        httpPost.setHeader("Content-Type", "application/json");
+        
+        HttpResponse response = httpClient.execute(httpPost);
+        int statusCode = response.getStatusLine().getStatusCode();
+        
+        if (statusCode < 200 || statusCode >= 300) {
+            throw new IOException("Failed to unsubscribe from WebSub hub. Status code: " + statusCode);
+        }
+    }
+
 
     private void setupContextAccessConditionsRepo(ContextManagementConfig ctxConfig, HttpInterfaceConfig httpConfig, Environment env)
             throws Exception {
@@ -536,6 +564,101 @@ public class ContextMgmtVerticle extends AbstractVerticle {
                                 LOGGER.error("Unexpected error adding profiled context", e);
                                 message.fail(HttpStatus.SC_INTERNAL_SERVER_ERROR, 
                                     "Unexpected error: " + e.getMessage());
+                            }
+                        }
+                        case ContextMessage.AddContextStream addContextStream -> {
+                            LOGGER.info("Handling AddContextStream request for URI: " + addContextStream.streamURI());
+                            try {
+                                JsonObject streamConfigJson = new JsonObject(addContextStream.streamConfig());
+                                String streamURI = addContextStream.streamURI();
+
+                                // if (!managedContextStreamURIs.contains(streamURI)) {
+                                //     managedContextStreamURIs.add(streamURI);
+                                //     LOGGER.info("Added stream URI {} to managed context streams", streamURI);
+                                // } else {
+                                //     LOGGER.info("Stream URI {} is already being managed", streamURI);
+                                // }                      
+
+                                ContextStream stream = new ContextStream(streamURI, 
+                                    streamConfigJson.getString("ontologyUrl"), 
+                                    streamConfigJson.getJsonArray("assertions").getList());
+                                contextStreamMap.put(streamURI, stream);
+
+                                // managedContextStreamURIs.add(streamURI);
+                                LOGGER.info("Context stream {} added to managed streams", streamURI);
+                                LOGGER.info("Context stream {} indexed successfully", streamURI);
+
+                                final var httpConfig = this.vertx.sharedData()
+                                    .<String, HttpInterfaceConfig>getLocalMap("http-config")
+                                    .get("default");
+                                final var webSubConfig = this.vertx.sharedData()
+                                    .<String, WebSubConfig>getLocalMap("notification-config")
+                                    .get("default");
+
+                                try {
+                                    subscribeToHub(httpConfig, webSubConfig, streamURI);
+                                    LOGGER.info("Subscribed to stream: " + streamURI + " (name: " + stream.getStreamName() + ")");
+                                } catch (IOException e) {
+                                    LOGGER.error("Failed to subscribe to stream: " + streamURI, e);
+                                }
+
+                                // Create a response JSON object with the stream URI and status
+                                JsonObject response = new JsonObject()
+                                    .put("streamURI", streamURI)
+                                    .put("status", "indexed")
+                                    .put("managed", true);
+                                
+                                message.reply(response.encode());
+                                LOGGER.info("Successfully indexed context stream: {}", streamURI);
+                                
+                            } catch (Exception e) {
+                                LOGGER.error("Error processing AddContextStream request", e);
+                                message.fail(HttpStatus.SC_INTERNAL_SERVER_ERROR, 
+                                    "Error processing context stream: " + e.getMessage());
+                            }
+                        }
+                        case ContextMessage.RemoveContextStream removeContextStream -> {
+                            LOGGER.info("Handling RemoveContextStream request for URI: " + removeContextStream.streamURI());
+                            try {
+                                String streamURI = removeContextStream.streamURI();
+                                if (!contextStreamMap.containsKey(streamURI)) {
+                                    LOGGER.warn("Stream URI not found in managed context streams: " + streamURI);
+                                    message.fail(HttpStatus.SC_NOT_FOUND, 
+                                        "Context stream not found: " + streamURI);
+                                    return;
+                                }
+
+                                final var httpConfig = this.vertx.sharedData()
+                                    .<String, HttpInterfaceConfig>getLocalMap("http-config")
+                                    .get("default");
+                                final var webSubConfig = this.vertx.sharedData()
+                                    .<String, WebSubConfig>getLocalMap("notification-config")
+                                    .get("default");
+
+                                try {
+                                    unsubscribeFromHub(httpConfig, webSubConfig, streamURI);
+                                    LOGGER.info("Unsubscribed from stream: " + streamURI);
+                                } catch (IOException e) {
+                                    LOGGER.error("Failed to unsubscribe from stream: " + streamURI, e);
+                                }
+
+                                // Remove from contextStreamMap
+                                contextStreamMap.remove(streamURI);
+                                LOGGER.info("Context stream {} removed from managed streams", streamURI);
+                                LOGGER.info("Context stream {} unindexed successfully", streamURI);
+
+                                JsonObject response = new JsonObject()
+                                    .put("streamURI", streamURI)
+                                    .put("status", "removed")
+                                    .put("managed", false);
+                                
+                                message.reply(response.encode());
+                                LOGGER.info("Successfully removed context stream: {}", streamURI);
+                                
+                            } catch (Exception e) {
+                                LOGGER.error("Error processing RemoveContextStream request", e);
+                                message.fail(HttpStatus.SC_INTERNAL_SERVER_ERROR, 
+                                    "Error processing context stream removal: " + e.getMessage());
                             }
                         }
                         default -> {

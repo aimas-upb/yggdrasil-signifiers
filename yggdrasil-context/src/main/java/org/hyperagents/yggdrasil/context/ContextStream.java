@@ -10,7 +10,7 @@ import org.apache.jena.graph.Graph;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.hyperagents.yggdrasil.utils.HttpInterfaceConfig;
-import org.hyperagents.yggdrasil.utils.RepresentationFactory;
+
 import org.hyperagents.yggdrasil.utils.WebSubConfig;
 import org.hyperagents.yggdrasil.utils.impl.RepresentationFactoryTDImplt;
 import org.streamreasoning.rsp4j.api.stream.data.DataStream;

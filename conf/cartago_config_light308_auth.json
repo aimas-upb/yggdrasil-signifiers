@@ -5,7 +5,7 @@
     "base-uri" : "http://localhost:8080/"
   },
   "notification-config" : {
-    "enabled" : true
+    "enabled" : false
   },
   "agents" : [
     {

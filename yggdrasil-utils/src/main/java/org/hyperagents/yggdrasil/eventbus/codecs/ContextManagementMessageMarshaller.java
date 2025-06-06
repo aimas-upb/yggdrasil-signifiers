@@ -53,6 +53,13 @@ public class ContextManagementMessageMarshaller
             case ADD_PROFILED_CONTEXT -> new ContextMessage.AddProfiledContext(
                 jsonObject.get(MessageFields.RDF_CONTENT.getName()).getAsString()
             );
+            case ADD_CONTEXT_STREAM -> new ContextMessage.AddContextStream(
+                jsonObject.get(MessageFields.STREAM_URI.getName()).getAsString(),
+                jsonObject.get(MessageFields.STREAM_CONFIG.getName()).getAsString()
+            );
+            case REMOVE_CONTEXT_STREAM -> new ContextMessage.RemoveContextStream(
+                jsonObject.get(MessageFields.STREAM_URI.getName()).getAsString()
+            );
             default -> throw new JsonParseException("The request method is not valid");
         };
     }
@@ -101,6 +108,15 @@ public class ContextManagementMessageMarshaller
             case ContextMessage.AddProfiledContext addProfiledContext -> {
                 jsonObject.addProperty(MessageFields.REQUEST_METHOD.getName(), MessageRequestMethods.ADD_PROFILED_CONTEXT.getName());
                 jsonObject.addProperty(MessageFields.RDF_CONTENT.getName(), addProfiledContext.rdfContent());
+            }
+            case ContextMessage.AddContextStream addContextStream -> {
+                jsonObject.addProperty(MessageFields.REQUEST_METHOD.getName(), MessageRequestMethods.ADD_CONTEXT_STREAM.getName());
+                jsonObject.addProperty(MessageFields.STREAM_URI.getName(), addContextStream.streamURI());
+                jsonObject.addProperty(MessageFields.STREAM_CONFIG.getName(), addContextStream.streamConfig());
+            }
+            case ContextMessage.RemoveContextStream removeContextStream -> {
+                jsonObject.addProperty(MessageFields.REQUEST_METHOD.getName(), MessageRequestMethods.REMOVE_CONTEXT_STREAM.getName());
+                jsonObject.addProperty(MessageFields.STREAM_URI.getName(), removeContextStream.streamURI());
             }
         }
 

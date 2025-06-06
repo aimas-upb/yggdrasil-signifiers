@@ -28,6 +28,8 @@ enum MessageRequestMethods {
   GET_PROFILED_CONTEXT("getProfiledContext"),
   ADD_STATIC_CONTEXT("addStaticContext"),
   ADD_PROFILED_CONTEXT("addProfiledContext"),
+  ADD_CONTEXT_STREAM("addContextStream"),
+  REMOVE_CONTEXT_STREAM("removeContextStream"),
   CONTEXT_STREAM_VERIFY_SUBSCRIPTION("contextStreamVerifySubscription"),
   CONTEXT_STREAM_UPDATE("contextStreamUpdate"),
   GET_CONTEXT_STREAM_REPRESENTATION("getContextStreamRepresentation"),

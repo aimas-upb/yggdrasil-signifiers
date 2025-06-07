@@ -141,7 +141,10 @@ public class WACHandler {
     
     // first, consider if the wacConfig is enabled
     if (!wacConfig.isEnabled()) {
-      LOGGER.info("WAC is disabled. Skipping Authorization validation.");
+      LOGGER.info("=== WAC AUTHORIZATION CHECK ===");
+      LOGGER.info("WAC is DISABLED. Skipping Authorization validation.");
+      LOGGER.info("REQUEST ALLOWED: No authorization required");
+      LOGGER.info("===============================");
       routingContext.next();
       return;
     }
@@ -149,24 +152,37 @@ public class WACHandler {
     // obtain the entity IRI by concatenating the base URI with the request path up to the second to last path segment, which will contain the artifact id
     String requestPath = routingContext.request().path();
     String artifactIRI = httpConfig.getBaseUri() + requestPath.substring(0, requestPath.lastIndexOf("/")) + ARTIFACT_FRAGMENT;
-    
+
     // obtain the agent's web id from the request header
     String agentURI = routingContext.request().getHeader("X-Agent-WebID");
 
-    LOGGER.info("Handling Authorization validation for resource with URI: " + artifactIRI 
-      + " invoked by agent with WebID: " + agentURI);
+    LOGGER.info("=== WAC AUTHORIZATION CHECK ===");
+    LOGGER.info("WAC is ENABLED. Performing authorization validation...");
+    LOGGER.info("HTTP Method: " + routingContext.request().method());
+    LOGGER.info("Request Path: " + requestPath);
+    LOGGER.info("Target Resource URI: " + artifactIRI);
+    LOGGER.info("Agent WebID: " + agentURI);
+    LOGGER.info("Access Type Required: WRITE (for artifact creation)");
+    LOGGER.info("Sending authorization request to WAC Verticle...");
     
     // send an AuthorizeAccess request to the WAC Verticle using the wacMessagebox
     this.wacMessagebox
       .sendMessage(new WACMessage.AuthorizeAccess(artifactIRI, agentURI, AuthorizationAccessType.WRITE.getName()))
       .onSuccess(reply -> {
         // if the access is granted, we let the request go through
-        LOGGER.info("Access to resource with URI: " + artifactIRI + " granted.");
+        LOGGER.info("WAC AUTHORIZATION RESULT: GRANTED");
+        LOGGER.info("Access to resource with URI: " + artifactIRI + " ALLOWED for agent: " + agentURI);
+        LOGGER.info("Proceeding with request processing...");
+        LOGGER.info("===============================");
         routingContext.next();
       })
       .onFailure(t -> {
         // otherwise we return an error
-        LOGGER.info("Access to resource with URI: " + artifactIRI + " denied.");
+        LOGGER.info("WAC AUTHORIZATION RESULT: DENIED");
+        LOGGER.info("Access to resource with URI: " + artifactIRI + " DENIED for agent: " + agentURI);
+        LOGGER.error("Authorization failure reason: " + t.getMessage());
+        LOGGER.info("Returning HTTP 401 Unauthorized");
+        LOGGER.info("===============================");
         routingContext.response().setStatusCode(HttpStatus.SC_UNAUTHORIZED).end();
       });
 

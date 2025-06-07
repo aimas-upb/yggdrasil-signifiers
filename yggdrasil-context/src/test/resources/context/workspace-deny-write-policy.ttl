@@ -1,0 +1,15 @@
+@prefix acl: <http://www.w3.org/ns/auth/acl#> .
+@prefix cashmere: <https://aimas.cs.pub.ro/ont/cashmere#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix ex: <http://example.org/> .
+
+# WORKSPACE-LEVEL authorization that denies write to ALL contained artifacts
+ex:workspaceDenyWriteAuth a cashmere:ContextBasedAuthorization ;
+    acl:accessTo <http://localhost:8080/workspaces/lab308#workspace> ;
+    acl:mode acl:Read ;  # Only allow read, NO write access
+    acl:agent acl:AuthenticatedAgent ;
+    cashmere:hasAccessCondition ex:alwaysDenyWriteCondition .
+
+# SHACL condition that blocks write operations
+ex:alwaysDenyWriteCondition a cashmere:ContextBasedAccessCondition ;
+    sh:severity sh:Violation .  # This will cause validation to fail

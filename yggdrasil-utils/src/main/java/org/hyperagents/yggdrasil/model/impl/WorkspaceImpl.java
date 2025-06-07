@@ -20,17 +20,19 @@ public class WorkspaceImpl implements Workspace {
   private final Set<Artifact> artifacts;
   private final Set<YggdrasilAgent> agents;
   private final Path representation;
+  private final String contextAccessPolicyURL;
 
   /**
    * Default constructor.
    */
   public WorkspaceImpl(final String name, final String metaData, final String parentName,
                        final Set<YggdrasilAgent> agents, final Set<Artifact> artifacts,
-                       final String representation) {
+                       final String representation, final String contextAccessPolicyURL) {
     this.name = name;
     this.parentName = parentName;
     this.artifacts = Set.copyOf(artifacts);
     this.agents = Set.copyOf(agents);
+    this.contextAccessPolicyURL = contextAccessPolicyURL;
 
     if (metaData != null && new File(metaData).isFile()) {
       this.metaData = Path.of(metaData);
@@ -43,7 +45,6 @@ public class WorkspaceImpl implements Workspace {
     } else {
       this.representation = null;
     }
-
   }
 
   @Override
@@ -59,12 +60,13 @@ public class WorkspaceImpl implements Workspace {
       && Objects.equals(parentName, workspace.parentName)
       && Objects.equals(artifacts, workspace.artifacts)
       && Objects.equals(agents, workspace.agents)
-      && Objects.equals(representation, workspace.representation);
+      && Objects.equals(representation, workspace.representation)
+      && Objects.equals(contextAccessPolicyURL, workspace.contextAccessPolicyURL);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(name, metaData, parentName, artifacts, agents, representation);
+    return Objects.hash(name, metaData, parentName, artifacts, agents, representation, contextAccessPolicyURL);
   }
 
   @Override
@@ -95,5 +97,10 @@ public class WorkspaceImpl implements Workspace {
   @Override
   public Optional<Path> getRepresentation() {
     return Optional.ofNullable(representation);
+  }
+
+  @Override
+  public Optional<String> getContextAccessPolicyURL() {
+    return Optional.ofNullable(contextAccessPolicyURL);
   }
 }

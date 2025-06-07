@@ -6,6 +6,8 @@ import java.io.UncheckedIOException;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,6 +31,9 @@ import org.eclipse.rdf4j.model.IRI;
 import org.eclipse.rdf4j.model.Statement;
 import org.eclipse.rdf4j.model.impl.SimpleValueFactory;
 import org.eclipse.rdf4j.model.vocabulary.RDF4J;
+import org.eclipse.rdf4j.query.BindingSet;
+import org.eclipse.rdf4j.query.TupleQuery;
+import org.eclipse.rdf4j.query.TupleQueryResult;
 import org.eclipse.rdf4j.repository.RepositoryConnection;
 import org.eclipse.rdf4j.repository.RepositoryException;
 import org.eclipse.rdf4j.repository.sail.SailRepository;
@@ -87,6 +92,18 @@ public class ContextMgmtVerticle extends AbstractVerticle {
     private SailRepository contextAccessConditionsRepo;
     private Map<String, String> artifactPolicies;
 
+    // Add workspace policies alongside artifact policies
+    private Map<String, String> workspacePolicies;
+    
+    // Add HMAS vocabulary constants
+    private static final String HMAS_WORKSPACE = "https://purl.org/hmas/Workspace";
+    private static final String HMAS_PLATFORM = "https://purl.org/hmas/HypermediaMASPlatform";
+    private static final String HMAS_ARTIFACT = "https://purl.org/hmas/Artifact";
+    private static final String HMAS_CONTAINS = "https://purl.org/hmas/contains";
+    private static final String HMAS_IS_CONTAINED_IN = "https://purl.org/hmas/isContainedIn";
+    private static final String HMAS_HOSTS = "https://purl.org/hmas/hosts";
+    private static final String ACL_DEFAULT = "http://www.w3.org/ns/auth/acl#default";
+
     @Override
     public void start(final Promise<Void> startPromise) {
         // retrieve the configuration object for the context management service
@@ -106,6 +123,9 @@ public class ContextMgmtVerticle extends AbstractVerticle {
         // initialize the map of context domains, the map of dynamic context assertions and the map of artifact policies
         contextDomains = new HashMap<>();
         artifactPolicies = new HashMap<>();
+        
+        // Initialize workspace policies map
+        workspacePolicies = new HashMap<>();
         
         // get the base and service URIs from the configurations
         this.baseURITrailingSlash = httpConfig.getBaseUriTrailingSlash();
@@ -280,8 +300,26 @@ public class ContextMgmtVerticle extends AbstractVerticle {
         ShaclSail shaclSail = new ShaclSail(new MemoryStore());
         contextAccessConditionsRepo = new SailRepository(shaclSail);
 
-        // read the artifact-policies JSON object from the known-artifacts part of the envConfig
+        // Process workspaces first for hierarchy setup
         for (var wsp : env.getWorkspaces()) {
+            // Handle workspace-level policies
+            if (wsp.getContextAccessPolicyURL().isPresent()) {
+                String workspaceURL = httpConfig.getWorkspaceUri(wsp.getName()) + "#workspace";
+                workspacePolicies.put(workspaceURL, wsp.getContextAccessPolicyURL().get());
+                
+                try {
+                    IRI contextIRI = SimpleValueFactory.getInstance().createIRI(workspaceURL);
+                    URL policyURL = URI.create(wsp.getContextAccessPolicyURL().get()).toURL();
+                    contextAccessConditionsRepo.getConnection().add(policyURL, null, RDFFormat.TURTLE, contextIRI);
+                    LOGGER.info("Context access conditions for workspace " + workspaceURL + " loaded successfully.");
+                } catch (Exception e) {
+                    LOGGER.error("Error reading the RDF content of the context access conditions for workspace " + workspaceURL + " from the source: " + wsp.getContextAccessPolicyURL().get() 
+                        + ". Reason: " + e.getMessage());
+                    throw new Exception("Error setting up context access conditions repository", e);
+                }
+            }
+            
+            // Handle artifact-level policies (existing code)
             for (var artifact : wsp.getArtifacts()) {
                 if (artifact.getContextAccessPolicyURL().isPresent()) {
                     // form the URL path that will correspond at runtime to this artifact
@@ -330,6 +368,10 @@ public class ContextMgmtVerticle extends AbstractVerticle {
                             LOGGER.info("Handling Context-based access validation action...");
                             validateContextBasedAccess(msgContent.accessRequesterURI(), msgContent.accessedResourceURI(), message);
                         }
+                        case ContextMessage.ValidateWorkspaceContextBasedAccess msgContent -> {
+                            LOGGER.info("Handling Workspace context-based access validation action...");
+                            validateContextBasedAccess(msgContent.accessRequesterURI(), msgContent.accessedWorkspaceURI(), message);
+                        }
                         case ContextMessage.GetStaticContext msgContent -> {
                             LOGGER.info("Handling GetStaticContext action...");
                             message.reply(staticContextRepo.getConnection().getStatements(null, null, null, false));
@@ -360,6 +402,308 @@ public class ContextMgmtVerticle extends AbstractVerticle {
         });  
     }
 
+    // Replace the existing validateContextBasedAccess method with hierarchical version
+    private void validateContextBasedAccess(String accessRequesterURI, String accessedResourceURI, Message<ContextMessage> message) {
+        LOGGER.info("Starting hierarchical access validation for resource: " + accessedResourceURI + " by requester: " + accessRequesterURI);
+        
+        // Step 1: Try to find effective access control resource following WAC-like hierarchy
+        EffectiveAccessControl effectiveAccessControl = findEffectiveAccessControl(accessedResourceURI);
+        
+        if (effectiveAccessControl == null) {
+            // No access control found in the entire hierarchy - allow free access
+            LOGGER.info("Access to resource " + accessedResourceURI + " allowed for requester: " 
+                       + accessRequesterURI + ". Reason: No access conditions found in hierarchy.");
+            message.reply(true);
+            return;
+        }
+        
+        LOGGER.info("Found effective access control: " + effectiveAccessControl.type + " for resource: " + effectiveAccessControl.resourceURI);
+        
+        // Step 2: Perform context validation using the effective access control
+        performContextValidation(accessRequesterURI, accessedResourceURI, effectiveAccessControl, message);
+    }
+
+    // Main method to find effective access control following hierarchy
+    private EffectiveAccessControl findEffectiveAccessControl(String resourceURI) {
+        LOGGER.debug("Finding effective access control for resource: " + resourceURI);
+        
+        // Step 1: Check if the resource itself has direct access conditions (accessTo)
+        EffectiveAccessControl directAccess = checkDirectAccessConditions(resourceURI);
+        if (directAccess != null) {
+            return directAccess;
+        }
+        
+        // Step 2: If no direct access, traverse hierarchy looking for default access
+        return findDefaultAccessInHierarchy(resourceURI);
+    }
+
+    // Check for direct access conditions on the resource
+    private EffectiveAccessControl checkDirectAccessConditions(String resourceURI) {
+        // Check if this resource has direct access policy
+        if (isAccessProtected(resourceURI)) {
+            String policyURI = getAccessPolicyURI(resourceURI);
+            
+            // Verify it has hasAccessCondition (not just default)
+            if (hasDirectAccessCondition(resourceURI, policyURI)) {
+                return new EffectiveAccessControl(resourceURI, policyURI, AccessControlType.DIRECT_ACCESS_TO);
+            }
+        }
+        
+        return null;
+    }
+
+    // Check if a resource has direct access conditions (hasAccessCondition)
+    private boolean hasDirectAccessCondition(String resourceURI, String policyURI) {
+        try (RepositoryConnection conn = contextAccessConditionsRepo.getConnection()) {
+            IRI resourceIRI = SimpleValueFactory.getInstance().createIRI(resourceURI);
+            
+            // Query to check if there are any hasAccessCondition statements for this resource
+            String query = 
+                "PREFIX cashmere: <" + CASHMERE.CASHMERE_NS + "> " +
+                "ASK { ?resource cashmere:hasAccessCondition ?condition }";
+                
+            var booleanQuery = conn.prepareBooleanQuery(query);
+            booleanQuery.setBinding("resource", resourceIRI);
+            return booleanQuery.evaluate();
+                      
+        } catch (RepositoryException e) {
+            LOGGER.error("Error checking direct access conditions for resource: " + resourceURI, e);
+            return false;
+        }
+    }
+
+    // Find default access by traversing the containment hierarchy
+    private EffectiveAccessControl findDefaultAccessInHierarchy(String resourceURI) {
+        // Get the containment hierarchy path
+        List<String> hierarchyPath = getContainmentHierarchy(resourceURI);
+        
+        // Traverse from immediate parent to root
+        for (String parentURI : hierarchyPath) {
+            LOGGER.debug("Checking default access for parent: " + parentURI);
+            
+            EffectiveAccessControl defaultAccess = checkDefaultAccess(parentURI);
+            if (defaultAccess != null) {
+                return defaultAccess;
+            }
+        }
+        
+        return null; // No access control found in hierarchy
+    }
+
+    // Get the containment hierarchy for a resource (from immediate parent to platform)
+    private List<String> getContainmentHierarchy(String resourceURI) {
+        List<String> hierarchy = new ArrayList<>();
+        
+        try {
+            String currentURI = resourceURI;
+            String parentURI = getImmediateParent(currentURI);
+            
+            while (parentURI != null) {
+                hierarchy.add(parentURI);
+                currentURI = parentURI;
+                parentURI = getImmediateParent(currentURI);
+            }
+            
+        } catch (Exception e) {
+            LOGGER.error("Error building containment hierarchy for: " + resourceURI, e);
+        }
+        
+        return hierarchy;
+    }
+
+    // Get the immediate parent of a resource in the HMAS hierarchy
+    private String getImmediateParent(String resourceURI) {
+        try {
+            // Check if it's an artifact
+            if (resourceURI.contains("/artifacts/")) {
+                // Extract workspace URI from artifact URI
+                // e.g., http://localhost:8080/workspaces/w1/artifacts/c0#artifact 
+                // -> http://localhost:8080/workspaces/w1#workspace
+                String workspaceURI = resourceURI.substring(0, resourceURI.indexOf("/artifacts/")) + "#workspace";
+                return workspaceURI;
+            }
+            
+            // Check if it's a workspace - query RDF store to find parent
+            if (resourceURI.contains("#workspace")) {
+                return findParentWorkspaceOrPlatform(resourceURI);
+            }
+            
+        } catch (Exception e) {
+            LOGGER.error("Error finding immediate parent for: " + resourceURI, e);
+        }
+        
+        return null;
+    }
+
+    // Find parent workspace or platform for a given workspace
+    private String findParentWorkspaceOrPlatform(String workspaceURI) {
+        try {
+            String baseWorkspaceURI = workspaceURI.replace("#workspace", "");
+            
+            // Check if this is a sub-workspace by looking at URI structure
+            String[] pathParts = baseWorkspaceURI.split("/");
+            
+            if (pathParts.length > 4) { // More than /workspaces/name
+                // This might be a sub-workspace, find parent
+                String parentPath = String.join("/", Arrays.copyOf(pathParts, pathParts.length - 1));
+                return parentPath + "#workspace";
+            } else {
+                // This is a top-level workspace, parent is platform
+                String platformURI = baseWorkspaceURI.substring(0, baseWorkspaceURI.indexOf("/workspaces/")) + "#platform";
+                return platformURI;
+            }
+            
+        } catch (Exception e) {
+            LOGGER.error("Error finding parent for workspace: " + workspaceURI, e);
+            return null;
+        }
+    }
+
+    // Check if a parent resource has default access rules
+    private EffectiveAccessControl checkDefaultAccess(String parentURI) {
+        // Check if this parent has default access policies
+        if (isAccessProtected(parentURI)) {
+            String policyURI = getAccessPolicyURI(parentURI);
+            
+            // Check if it has default access rules
+            if (hasDefaultAccessRules(parentURI, policyURI)) {
+                return new EffectiveAccessControl(parentURI, policyURI, AccessControlType.DEFAULT_ACCESS);
+            }
+        }
+        
+        return null;
+    }
+
+    // Check if a resource has default access rules
+    private boolean hasDefaultAccessRules(String resourceURI, String policyURI) {
+        try (RepositoryConnection conn = contextAccessConditionsRepo.getConnection()) {
+            IRI resourceIRI = SimpleValueFactory.getInstance().createIRI(resourceURI);
+            
+            // Query to check for default access rules (WAC default property)
+            String query = 
+                "PREFIX acl: <http://www.w3.org/ns/auth/acl#> " +
+                "PREFIX cashmere: <" + CASHMERE.CASHMERE_NS + "> " +
+                "ASK { " +
+                "  ?authorization acl:default ?resource . " +
+                "  ?authorization cashmere:hasAccessCondition ?condition " +
+                "}";
+                
+            var booleanQuery = conn.prepareBooleanQuery(query);
+            booleanQuery.setBinding("resource", resourceIRI);
+            return booleanQuery.evaluate();
+                      
+        } catch (RepositoryException e) {
+            LOGGER.error("Error checking default access rules for resource: " + resourceURI, e);
+            return false;
+        }
+    }
+
+    // Perform the actual context validation using effective access control
+    private void performContextValidation(String accessRequesterURI, String accessedResourceURI, 
+                                        EffectiveAccessControl effectiveAccessControl, Message<ContextMessage> message) {
+        
+        LOGGER.info("Performing context validation using " + effectiveAccessControl.type + 
+                   " from resource: " + effectiveAccessControl.resourceURI);
+        
+        // Create validation repository
+        SailRepository contextDataRepo = new SailRepository(new MemoryStore());
+        contextDataRepo.init();
+
+        // Add context information
+        addStaticContext(contextDataRepo, accessedResourceURI, accessRequesterURI);
+        addProfiledContext(contextDataRepo, accessedResourceURI, accessRequesterURI);
+        addDynamicContext(contextDataRepo, accessedResourceURI, accessRequesterURI);
+
+        // Get access conditions from the effective access control resource
+        Optional<List<Statement>> accessConditions = getEffectiveAccessConditions(
+            effectiveAccessControl.resourceURI, effectiveAccessControl.type);
+        
+        if (accessConditions.isPresent()) {
+            // Create validation repository with SHACL
+            ShaclSail shaclSailValidation = new ShaclSail(new MemoryStore());
+            shaclSailValidation.setLogValidationViolations(true);
+            shaclSailValidation.setGlobalLogValidationExecution(true);
+            shaclSailValidation.setRdfsSubClassReasoning(true);
+            SailRepository validationRepo = new SailRepository(shaclSailValidation);
+            validationRepo.init();
+
+            // Customize access conditions for the actual requester and resource
+            List<Statement> customAccessConditions = customizeAccessConditions(
+                accessConditions.get(), accessRequesterURI, accessedResourceURI);
+                
+            try (SailRepositoryConnection conn = validationRepo.getConnection()) {
+                conn.begin();
+                conn.add(customAccessConditions, RDF4J.SHACL_SHAPE_GRAPH);
+                conn.add(contextDataRepo.getConnection().getStatements(null, null, null, false));
+                conn.commit();
+
+                LOGGER.info("Access to resource " + accessedResourceURI + " allowed for requester: " 
+                           + accessRequesterURI + ". Reason: Context validation successful using " + 
+                           effectiveAccessControl.type);
+                message.reply(true);
+                
+            } catch (Exception e) {
+                Throwable cause = e.getCause();
+                if (cause instanceof ValidationException) {
+                    LOGGER.info("Access to resource " + accessedResourceURI + " denied for requester: " 
+                               + accessRequesterURI + ". Reason: " + cause.getMessage() + 
+                               " (using " + effectiveAccessControl.type + ")"); 
+                    message.fail(403, "Access denied. Reason: " + cause.getMessage());
+                } else {
+                    LOGGER.error("Error validating access conditions: " + e.getMessage());
+                    message.fail(500, "Access validation error");
+                }
+            } finally {
+                validationRepo.shutDown();
+            }
+        } else {
+            // No access conditions found even in effective resource
+            LOGGER.info("No access conditions found in effective resource. Access allowed by default.");
+            message.reply(true);
+        }
+        
+        contextDataRepo.shutDown();
+    }
+
+    // Get access conditions from the effective access control resource
+    private Optional<List<Statement>> getEffectiveAccessConditions(String effectiveResourceURI, AccessControlType type) {
+        try (RepositoryConnection conn = contextAccessConditionsRepo.getConnection()) {
+            IRI resourceIRI = SimpleValueFactory.getInstance().createIRI(effectiveResourceURI);
+            
+            // Query based on access control type
+            String query;
+            if (type == AccessControlType.DIRECT_ACCESS_TO) {
+                query = "PREFIX cashmere: <" + CASHMERE.CASHMERE_NS + "> " +
+                       "CONSTRUCT { ?s ?p ?o } " +
+                       "WHERE { " +
+                       "  ?resource cashmere:hasAccessCondition ?condition . " +
+                       "  ?condition ?p ?o . " +
+                       "  OPTIONAL { ?s ?sp ?condition } " +
+                       "}";
+            } else { // DEFAULT_ACCESS
+                query = "PREFIX acl: <http://www.w3.org/ns/auth/acl#> " +
+                       "PREFIX cashmere: <" + CASHMERE.CASHMERE_NS + "> " +
+                       "CONSTRUCT { ?s ?p ?o } " +
+                       "WHERE { " +
+                       "  ?authorization acl:default ?resource . " +
+                       "  ?authorization cashmere:hasAccessCondition ?condition . " +
+                       "  ?condition ?p ?o . " +
+                       "  OPTIONAL { ?s ?sp ?condition } " +
+                       "}";
+            }
+            
+            var graphQuery = conn.prepareGraphQuery(query);
+            graphQuery.setBinding("resource", resourceIRI);
+            return Optional.of(Iterations.asList(graphQuery.evaluate()));
+                    
+        } catch (RepositoryException e) {
+            LOGGER.error("Error getting effective access conditions for: " + effectiveResourceURI, e);
+            return Optional.empty();
+        }
+    }
+
+
+
     private void updateContextStream(String streamURI, String graphSerialized, long updateTimestamp, Message<ContextMessage> message) {
         // Get the ContextStream object corresponding to the streamURI
         ContextStream stream = contextStreamMap.get(streamURI);
@@ -387,30 +731,70 @@ public class ContextMgmtVerticle extends AbstractVerticle {
     // =================== Methods for context validation =========================
     // ============================================================================
 
-    private boolean isAccessProtected(String artifactURI) {
-        return artifactPolicies.containsKey(artifactURI);
-    }
-
-
-    private Optional<List<Statement>> getAccessConditions(String artifactURI) {
-        // get the URI of the named graph containing the access conditions for the artifact
-        String accessConditionsGraphURI = artifactPolicies.get(artifactURI);
-
-        if (accessConditionsGraphURI == null) {
-            return Optional.empty();
-        }
-
-        // get the statements in the named graph
-        try (RepositoryConnection conn = contextAccessConditionsRepo.getConnection()) {
-            return Optional.of(Iterations.asList(conn.getStatements(null, null, null, true, conn.getValueFactory().createIRI(artifactURI))));
+    private void addStaticContext(SailRepository contextDataRepo, String accessedResourceURI, String accessRequesterURI) {
+        try (RepositoryConnection sourceConn = staticContextRepo.getConnection();
+             RepositoryConnection targetConn = contextDataRepo.getConnection()) {
+            targetConn.add(sourceConn.getStatements(null, null, null, false));
         } catch (RepositoryException e) {
-            LOGGER.error("Error accessing the context access conditions repository: " + e.getMessage());
-            return Optional.empty();
+            LOGGER.error("Error loading static context information into the validation data repository: " + e.getMessage());
         }
     }
 
+    private void addProfiledContext(SailRepository contextDataRepo, String accessedResourceURI, String accessRequesterURI) {
+        try (RepositoryConnection sourceConn = profiledContextRepo.getConnection();
+             RepositoryConnection targetConn = contextDataRepo.getConnection()) {
+            targetConn.add(sourceConn.getStatements(null, null, null, false));
+        } catch (RepositoryException e) {
+            LOGGER.error("Error loading profiled context information into the validation data repository: " + e.getMessage());
+        }
+    }
 
-    private List<Statement> customizeAccessConditions(List<Statement> accessConditions, String accessRequesterURI, String accessedArtifactURI) {
+    private void addDynamicContext(SailRepository contextDataRepo, String accessedResourceURI, String accessRequesterURI) {
+        // get the list of ContextDomainGroup URIs relevant for this access request
+        Optional<List<String>> ctxDomainGroupURIs = getContextDomainGroupURIs(accessedResourceURI, accessRequesterURI);
+        
+        if (ctxDomainGroupURIs.isPresent()) {
+            for (String ctxDomainURI : ctxDomainGroupURIs.get()) {
+                // get the ContextDomain object from the contextDomains map
+                ContextDomain ctxDomain = contextDomains.get(ctxDomainURI);
+                
+                if (ctxDomain != null) {
+                    // get the context domain membership statements from the context domain object
+                    Optional<List<Statement>> membershipStatements = ctxDomain.getMembershipStatements();
+                    
+                    // add the membership statements to the validationDataRepo
+                    if (membershipStatements.isPresent()) {
+                        try (RepositoryConnection conn = contextDataRepo.getConnection()) {
+                            conn.add(membershipStatements.get());
+                        } catch (RepositoryException e) {
+                            LOGGER.error("Error loading the dynamic context information into the validation data repository: " + e.getMessage());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Update the existing isAccessProtected method to check both artifacts and workspaces
+    private boolean isAccessProtected(String resourceURI) {
+        return artifactPolicies.containsKey(resourceURI) || workspacePolicies.containsKey(resourceURI);
+    }
+
+    // Get the policy URI for a given resource
+    private String getAccessPolicyURI(String resourceURI) {
+        if (artifactPolicies.containsKey(resourceURI)) {
+            return artifactPolicies.get(resourceURI);
+        } else if (workspacePolicies.containsKey(resourceURI)) {
+            return workspacePolicies.get(resourceURI);
+        }
+        return null;
+    }
+
+    // ============================================================================
+    // ======================== Dynamic Context Validation ========================
+    // ============================================================================
+
+    private List<Statement> customizeAccessConditions(List<Statement> accessConditions, String accessRequesterURI, String accessedResourceURI) {
         // Iterate through all the statements in the accessConditions list and replace the `cashmere:accessRequester` object placeholder 
         // with the actual accessRequesterURI
         accessConditions.replaceAll(stmt -> {
@@ -423,151 +807,6 @@ public class ContextMgmtVerticle extends AbstractVerticle {
         
         // return the customized access conditions
         return accessConditions;
-    }
-
-
-    private void validateContextBasedAccess(String accessRequesterURI, String accessedResourceURI, Message<ContextMessage> message) {
-        // To validate context access we must bring together the static, profiled and dynamic context information
-        // from their respective repositories and validate the access request against them.
-        // In the current version we assume that all context repositories are handled at platform level and are 
-        // available directly to the ContextMgmtVerticle.
-        // TODO: handle the case when the context repositories are managed by the artifacts themselves.
-
-        // If the artifact is not access protected, allow access by default
-        if (!isAccessProtected(accessedResourceURI)) {
-            message.reply(true);
-            LOGGER.info("Access to resource " + accessRequesterURI + " allowed for access requester: " 
-                        + accessRequesterURI + ". Reason: No access conditions found.");
-            return;
-        }
-
-        // Create an in-memory RDF store that will contain the union of the static, profiled and dynamic context information
-        // The store will be set up as a ShaclSail object to allow for SHACL validation of the access conditions against the context information
-        SailRepository contextDataRepo = new SailRepository(new MemoryStore());
-        contextDataRepo.init();
-
-        // start adding the static context information to the validationDataRepo
-        addStaticContext(contextDataRepo, accessedResourceURI, accessRequesterURI);
-
-        // start adding the profiled context information to the validationDataRepo
-        addProfiledContext(contextDataRepo, accessedResourceURI, accessRequesterURI);
-
-        // start adding the dynamic context information to the validationDataRepo
-        addDynamicContext(contextDataRepo, accessedResourceURI, accessRequesterURI);
-
-        // now we need to add the SHACL shapes graph containing the access conditions for the artifact to the validationDataRepo
-        Optional<List<Statement>> accessConditions = getAccessConditions(accessedResourceURI);
-        if (accessConditions.isPresent()) {
-            // create a Validation Repository as a ShaclSail in memory store
-            ShaclSail shaclSailValidation = new ShaclSail(new MemoryStore());
-            shaclSailValidation.setLogValidationViolations(true);
-            shaclSailValidation.setGlobalLogValidationExecution(true);
-            shaclSailValidation.setRdfsSubClassReasoning(true);
-            SailRepository validationRepo = new SailRepository(shaclSailValidation);
-            validationRepo.init();
-
-            // Replace the `cashmere:accessRequester` object placeholder in the access conditions with the actual accessRequesterURI
-            List<Statement> customAccessConditions = customizeAccessConditions(accessConditions.get(), accessRequesterURI, accessedResourceURI);
-            try (SailRepositoryConnection conn = validationRepo.getConnection()) {
-                // load the access conditions into the profiledContextRepo, under the RDF4J.SHACL_SHAPE_GRAPH context
-                conn.begin();
-                conn.add(customAccessConditions, RDF4J.SHACL_SHAPE_GRAPH);
-                
-                // for debug: serialize the contents of the validationRepo into a temporary turtle file
-                File tempValidationRepoFile = new File("/home/alex/OneDrive/AI-MAS/projects/2022-CASHMERE/dev/yggdrasil/src/test/resources/validationRepo.ttl");
-                Utils.serializeRepoConnection(conn, tempValidationRepoFile, RDF4J.SHACL_SHAPE_GRAPH);
-                
-                // conn.commit();
-
-                // // load the contents of the contextDataRepo into the validationRepo
-                // conn.begin();
-                conn.add(contextDataRepo.getConnection().getStatements(null, null, null, false));
-
-                // validate the access conditions against the profiled context repository
-                conn.commit();
-
-                // for debug: serialize the contents of the validationRepo into a temporary turtle file
-                File tempDataRepoFile = new File("/home/alex/OneDrive/AI-MAS/projects/2022-CASHMERE/dev/yggdrasil/src/test/resources/dataRepo.ttl");
-                Utils.serializeRepoConnection(conn, tempDataRepoFile);
-
-                LOGGER.info("Access to artifact " + accessedResourceURI + " allowed for access requester: " 
-                        + accessRequesterURI + ". Reason: Context validation successful.");
-            } catch (Exception e) {
-                Throwable cause = e.getCause();
-                if (cause instanceof ValidationException) {
-                    LOGGER.info("Access to artifact " + accessedResourceURI + " denied for access requester: " 
-                        + accessRequesterURI + ". Reason:  " + cause.getMessage()); 
-                } else {
-                    LOGGER.error("Error validating the access conditions of artifact: " + accessedResourceURI 
-                        + " for requester: " + accessRequesterURI +  " against the profiled context repository: " + e.getMessage());
-                }
-
-                // in case of error, deny access
-                message.fail(403, "Access denied. Reason: " + (cause != null ? cause.getMessage() : "Unknown error"));
-            }
-            finally {
-                // close the validationRepo
-                validationRepo.shutDown();
-            }
-        }
-        else {
-            // If no access conditions are found, allow access by default
-            LOGGER.info("No access conditions found in policy for artifact " + accessedResourceURI + ". Access allowed by default.");
-            message.reply(true);
-            return;
-        }
-
-        // If all validations are successful, allow access
-        message.reply(true);
-    }
-
-    private void addStaticContext(SailRepository contextDataRepo, String accessedArtifactURI, String accessRequesterURI) {
-        try (RepositoryConnection conn = contextDataRepo.getConnection()) {
-            // load the contents of the staticContextRepo into the validationDataRepo
-            conn.add(staticContextRepo.getConnection().getStatements(null, null, null, false));
-        } catch (RepositoryException e) {
-            LOGGER.error("Error loading the static context information into the validation data repository: " + e.getMessage());
-        }
-    }
-
-    private void addProfiledContext(SailRepository contextDataRepo, String accessedArtifactURI, String accessRequesterURI) {
-        try (RepositoryConnection conn = contextDataRepo.getConnection()) {
-            // load the contents of the profiledContextRepo into the validationDataRepo
-            conn.add(profiledContextRepo.getConnection().getStatements(null, null, null, false));
-        } catch (RepositoryException e) {
-            LOGGER.error("Error loading the profiled context information into the validation data repository: " + e.getMessage());
-        }
-    }
-
-    private void addDynamicContext(SailRepository contextDataRepo, String accessedArtifactURI, String accessRequesterURI) {
-        // This method is not yet implemented. It should load the dynamic context information into the validationDataRepo.
-        // The dynamic context information is stored in RDF streams that are managed by the ContextMgmtVerticle.
-        // The RDF streams are identified by the URIs of the dynamic ContextAssertions.
-        // The dynamic context information is updated by the artifacts themselves.
-        // The dynamic context information is used to validate the access request against the dynamic context conditions.
-        Optional<List<String>> contextDomainGroupURIs = getContextDomainGroupURIs(accessedArtifactURI, accessRequesterURI);
-        
-        if (contextDomainGroupURIs.isPresent()) {
-            for (String ctxGroupURI : contextDomainGroupURIs.get()) {
-                // get the ContextDomain URI from the contextDomainGroupURI
-                String ctxDomainURI = ContextDomain.getDomainFromGroup(ctxGroupURI);
-
-                // get the ContextDomain object from the contextDomains map
-                ContextDomain ctxDomain = contextDomains.get(ctxDomainURI);
-                
-                // get the context domain membership statements from the context domain object
-                Optional<List<Statement>> membershipStatements = ctxDomain.getMembershipStatements();
-                
-                // add the membership statements to the validationDataRepo
-                if (membershipStatements.isPresent()) {
-                    try (RepositoryConnection conn = contextDataRepo.getConnection()) {
-                        conn.add(membershipStatements.get());
-                    } catch (RepositoryException e) {
-                        LOGGER.error("Error loading the dynamic context information into the validation data repository: " + e.getMessage());
-                    }
-                }
-            }
-        }
     }
 
     // ============================================================================
@@ -599,4 +838,22 @@ public class ContextMgmtVerticle extends AbstractVerticle {
         return Optional.empty();
     }
 
+    // Add inner classes for effective access control
+    private static class EffectiveAccessControl {
+        public final String resourceURI;
+        public final String policyURI;
+        public final AccessControlType type;
+        
+        public EffectiveAccessControl(String resourceURI, String policyURI, AccessControlType type) {
+            this.resourceURI = resourceURI;
+            this.policyURI = policyURI;
+            this.type = type;
+        }
+    }
+
+    private enum AccessControlType {
+        DIRECT_ACCESS_TO,      // hasAccessCondition on the resource itself
+        DEFAULT_ACCESS,        // default access on a parent container
+        ACCESS_SUBJECT         // other access subjects as per WAC 4.3
+    }
 }

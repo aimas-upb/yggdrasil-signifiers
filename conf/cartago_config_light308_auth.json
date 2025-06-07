@@ -34,9 +34,7 @@
               "blue"
             ],
             "focused-by" : ["alex_agent"],
-            "representation": "/home/alex/OneDrive/AI-MAS/projects/2022-CASHMERE/dev/yggdrasil/yggdrasil-context/src/test/resources/td/light308_auth_artifact_td.ttl",
-            "access-policy-url": 
-              "file:///home/alex/OneDrive/AI-MAS/projects/2022-CASHMERE/dev/yggdrasil/yggdrasil-context/src/test/resources/context/upb-hmas-context-access-condition-shapes.ttl"
+            "representation": "/home/pasca/Desktop/yggdrasil-signifiers/yggdrasil-context/src/test/resources/td/light308_auth_artifact_td.ttl"
           }
         ],
         "joined-by" : ["alex_agent"]
@@ -50,13 +48,13 @@
   },
   "context-management-config" : {
     "enabled" : true,
-    "static-context": "file:///home/alex/OneDrive/AI-MAS/projects/2022-CASHMERE/dev/yggdrasil/yggdrasil-context/src/test/resources/context/upb-hmas-static-context.ttl",
-    "profiled-context": "file:///home/alex/OneDrive/AI-MAS/projects/2022-CASHMERE/dev/yggdrasil/yggdrasil-context/src/test/resources/context/upb-hmas-profiled-context.ttl",
+    "static-context": "file:///home/pasca/Desktop/yggdrasil-signifiers/yggdrasil-context/src/test/resources/context/upb-hmas-static-context.ttl",
+    "profiled-context": "file:///home/pasca/Desktop/yggdrasil-signifiers/yggdrasil-context/src/test/resources/context/upb-hmas-profiled-context.ttl",
     
     "context-streams": [
       {
         "stream_uri": "http://localhost:8080/context/streams/LocatedAt",
-        "ontology_url": "file:///home/alex/OneDrive/AI-MAS/projects/2022-CASHMERE/dev/yggdrasil/yggdrasil-context/src/test/resources/context/upb-hmas-ont.ttl",
+        "ontology_url": "file:///home/pasca/Desktop/yggdrasil-signifiers/yggdrasil-context/src/test/resources/context/upb-hmas-ont.ttl",
         
         "assertions": [
           "http://example.org/LocatedAt"
@@ -71,13 +69,19 @@
           "http://localhost:8080/context/streams/LocatedAt"
         ],
         "membership_rules": [
-          "file:///home/alex/OneDrive/AI-MAS/projects/2022-CASHMERE/dev/yggdrasil/yggdrasil-context/src/test/resources/context/lab308membership.rspql"
+          "file:///home/pasca/Desktop/yggdrasil-signifiers/yggdrasil-context/src/test/resources/context/lab308membership.rspql"
         ],
-        "engine_config_url": "file:///home/alex/OneDrive/AI-MAS/projects/2022-CASHMERE/dev/yggdrasil/yggdrasil-context/src/test/resources/context/lab308membership-csparql-engine-config.properties"
+        "engine_config_url": "file:///home/pasca/Desktop/yggdrasil-signifiers/yggdrasil-context/src/test/resources/context/lab308membership-csparql-engine-config.properties"
       }
     ]
   },
   "wac": {
-    "enabled": true
+    "enabled": true,
+    "workspace-policies": [
+      {
+        "workspace-uri": "http://localhost:8080/workspaces/lab308#workspace",
+        "policy-url": "file:///home/pasca/Desktop/yggdrasil-signifiers/yggdrasil-context/src/test/resources/context/workspace-allow-write-policy.ttl"
+      }
+    ]
   }
 }

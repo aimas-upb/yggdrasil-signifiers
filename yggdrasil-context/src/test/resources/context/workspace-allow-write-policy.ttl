@@ -1,0 +1,15 @@
+@prefix acl: <http://www.w3.org/ns/auth/acl#> .
+@prefix cashmere: <https://aimas.cs.pub.ro/ont/cashmere#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix ex: <http://example.org/> .
+
+# WORKSPACE-LEVEL authorization that allows read and write access to contained artifacts
+ex:workspaceAllowWriteAuth a cashmere:ContextBasedAuthorization ;
+    acl:accessTo <http://localhost:8080/workspaces/lab308#workspace> ;
+    acl:mode acl:Read, acl:Write ;  # Allow both read AND write access
+    acl:agent <http://localhost:8080/agents/alex> ;  # Specific agent alex
+    cashmere:hasAccessCondition ex:alwaysAllowCondition .
+
+# SHACL condition that allows operations
+ex:alwaysAllowCondition a cashmere:ContextBasedAccessCondition ;
+    sh:severity sh:Info .  # This will cause validation to succeed

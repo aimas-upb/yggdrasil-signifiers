@@ -1,0 +1,92 @@
+{
+  "http-config" : {
+    "host" : "localhost",
+    "port" : 8080,
+    "base-uri" : "http://localhost:8080/"
+  },
+  "notification-config" : {
+    "enabled" : true
+  },
+  "agents" : [
+    {
+      "name" : "alex_agent",
+      "agent-uri" : "http://localhost:8080/agents/alex",
+      "callback-uri" : "http://localhost:8081/"
+    },
+    {
+      "name" : "test_agent",
+      "agent-uri" : "http://localhost:8080/agents/test_agent",
+      "callback-uri" : "http://localhost:8082/"
+    }
+  ],
+  "environment-config" : {
+    "known-artifacts" : [
+      {
+        "class" : "http://example.org/HueLamp",
+        "template" : "org.hyperagents.yggdrasil.cartago.artifacts.AuthHueLampTD"
+      }
+    ],
+    "workspaces" : [
+      {
+        "name" : "lab308",
+        "parent-name" : "precis",
+        "artifacts" : [
+          {
+            "name" : "light308",
+            "class" : "http://example.org/HueLamp",
+            "init-params" : [
+              "off",
+              "blue"
+            ],
+            "focused-by" : ["alex_agent"],
+            "representation": "/home/pasca/Desktop/yggdrasil-signifiers/yggdrasil-context/src/test/resources/td/light308_auth_artifact_td.ttl"
+          }
+        ],
+        "joined-by" : ["alex_agent", "test_agent"]
+      },
+      {
+        "name" : "precis"
+      }
+    ],
+    "enabled" : true,
+    "ontology" : "td"
+  },
+  "context-management-config" : {
+    "enabled" : true,
+    "static-context": "file:///home/pasca/Desktop/yggdrasil-signifiers/yggdrasil-context/src/test/resources/context/upb-hmas-static-context.ttl",
+    "profiled-context": "file:///home/pasca/Desktop/yggdrasil-signifiers/yggdrasil-context/src/test/resources/context/upb-hmas-profiled-context.ttl",
+    
+    "context-streams": [
+      {
+        "stream_uri": "http://localhost:8080/context/streams/LocatedAt",
+        "ontology_url": "file:///home/pasca/Desktop/yggdrasil-signifiers/yggdrasil-context/src/test/resources/context/upb-hmas-ont.ttl",
+        
+        "assertions": [
+          "http://example.org/LocatedAt"
+        ]
+      }
+    ],
+    
+    "context-domains": [
+      {
+        "domain_uri": "http://localhost:8080/context/domains/lab308Domain",
+        "streams": [
+          "http://localhost:8080/context/streams/LocatedAt"
+        ],
+        "membership_rules": [
+          "file:///home/pasca/Desktop/yggdrasil-signifiers/yggdrasil-context/src/test/resources/context/lab308membership.rspql"
+        ],
+        "engine_config_url": "file:///home/pasca/Desktop/yggdrasil-signifiers/yggdrasil-context/src/test/resources/context/lab308membership-csparql-engine-config.properties"
+      }
+    ]
+  },
+  "wac": {
+    "enabled": true,
+    "workspace-policies": [
+      {
+        "workspace-uri": "http://localhost:8080/workspaces/lab308#workspace",
+        "policy-file": "file:///home/pasca/Desktop/yggdrasil-signifiers/yggdrasil-context/src/test/resources/context/lab308-workspace-alex-only.ttl"
+      }
+    ]
+  }
+}

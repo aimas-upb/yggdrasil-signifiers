@@ -259,41 +259,117 @@ public class WACVerticle extends AbstractVerticle {
         String accessedResourceUri = authReq.accessedResourceURI();
         AuthorizationAccessType accessType = AuthorizationAccessType.fromName(authReq.accessType()).get();
         
-        LOGGER.info("Validating Authorization for agent " + agentURI + " to access resource " + accessedResourceUri + " in mode " + accessType);
+        LOGGER.info("WAC: Starting authorization validation for agent {} to access resource {} in mode {}", agentURI, accessedResourceUri, accessType);
         
-        // DEBUG: Check what's actually in the registry
         AuthorizationRegistry authorizationRegistry = AuthorizationRegistry.getInstance();
-        LOGGER.info("DEBUG: Looking for authorizations for resource: {}", accessedResourceUri);
         
-        if (!authorizationRegistry.hasAccessAuthorization(accessedResourceUri, accessType)) {
-            LOGGER.info("Authorization not found for agent " + agentURI + " to access resource " + accessedResourceUri + " in mode " + accessType + ". Resource is public.");   
-            message.reply(true);
+        // Use the new hierarchical effective authorization system
+        List<ContextBasedAuthorization> effectiveAuthorizations = authorizationRegistry.getEffectiveAuthorizations(accessedResourceUri, accessType);
+        
+        if (effectiveAuthorizations.isEmpty()) {
+            LOGGER.info("WAC: No effective authorizations found for agent {} to access resource {} in mode {}. Access denied by default.", agentURI, accessedResourceUri, accessType);   
+            message.fail(403, "No effective authorizations found - access denied");
             return;
         }
+        
+        LOGGER.info("WAC: Found {} effective authorizations for resource {}, proceeding with context validation", effectiveAuthorizations.size(), accessedResourceUri);
+        
+        // Filter authorizations to only include those that apply to the specific agent
+        List<ContextBasedAuthorization> applicableAuthorizations = effectiveAuthorizations.stream()
+            .filter(auth -> {
+                if (agentURI == null) {
+                    return false; // No agent specified, deny access
+                }
+                return agentURI.equals(auth.getAuthorizedEntityURI()) || 
+                       CASHMERE.accessRequester.stringValue().equals(auth.getAuthorizedEntityURI());
+            })
+            .collect(java.util.stream.Collectors.toList());
+        
+        if (applicableAuthorizations.isEmpty()) {
+            LOGGER.info("WAC: No applicable authorizations found for agent {} (filtered from {} total)", agentURI, effectiveAuthorizations.size());
+            message.fail(403, "No applicable authorizations found for this agent");
+            return;
+        }
+        
+        LOGGER.info("WAC: Found {} applicable authorizations for agent {}", applicableAuthorizations.size(), agentURI);
         
         // Determine if this is a workspace or artifact based on the URI
         if (accessedResourceUri.contains("#workspace")) {
             // Forward to Context Management Verticle for workspace validation
             contextMessageBox.sendMessage(new ContextMessage.ValidateWorkspaceContextBasedAccess(agentURI, accessedResourceUri))
                 .onSuccess(r -> {
-                    LOGGER.info("Workspace authorization validated for agent " + agentURI + " to access resource " + accessedResourceUri + " in mode " + accessType);
+                    LOGGER.info("WAC: Workspace authorization validated successfully for agent {} to access resource {} in mode {}", agentURI, accessedResourceUri, accessType);
                     message.reply(true);
                 })
                 .onFailure(t -> {
-                    LOGGER.error("Error validating workspace authorization for agent " + agentURI + " to access resource " + accessedResourceUri + " in mode " + accessType, t);
-                    message.fail(403, "Authorization validation failed");
+                    LOGGER.error("WAC: Workspace authorization validation failed for agent {} to access resource {} in mode {}: {}", agentURI, accessedResourceUri, accessType, t.getMessage());
+                    message.fail(403, "Workspace authorization validation failed");
                 });
         } else {
-            // Forward to Context Management Verticle for artifact validation (existing logic)
-            contextMessageBox.sendMessage(new ContextMessage.ValidateContextBasedAccess(agentURI, accessedResourceUri))
-                .onSuccess(r -> {
-                    LOGGER.info("Authorization validated for agent " + agentURI + " to access resource " + accessedResourceUri + " in mode " + accessType);
-                    message.reply(true);
-                })
-                .onFailure(t -> {
-                    LOGGER.error("Error validating authorization for agent " + agentURI + " to access resource " + accessedResourceUri + " in mode " + accessType, t);
-                    message.fail(403, "Authorization validation failed");
-                });
+            // For artifacts, we need to validate against all applicable authorizations
+            // If any of the applicable authorizations pass validation, access is granted
+            validateArtifactWithEffectiveAuthorizations(agentURI, accessedResourceUri, accessType, applicableAuthorizations, message);
         }
+    }
+
+    /**
+     * Validates an artifact access request against multiple effective authorizations.
+     * Access is granted if ANY of the effective authorizations pass validation.
+     */
+    private void validateArtifactWithEffectiveAuthorizations(String agentURI, String accessedResourceUri, 
+            AuthorizationAccessType accessType, List<ContextBasedAuthorization> effectiveAuthorizations, 
+            Message<WACMessage> message) {
+        
+        LOGGER.info("WAC: Validating artifact access with {} effective authorizations", effectiveAuthorizations.size());
+        
+        // We'll try each effective authorization until one succeeds
+        validateNextAuthorization(agentURI, accessedResourceUri, accessType, effectiveAuthorizations, 0, message);
+    }
+
+    /**
+     * Recursively validates authorizations until one succeeds or all fail.
+     */
+    private void validateNextAuthorization(String agentURI, String accessedResourceUri, 
+            AuthorizationAccessType accessType, List<ContextBasedAuthorization> effectiveAuthorizations, 
+            int currentIndex, Message<WACMessage> message) {
+        
+        if (currentIndex >= effectiveAuthorizations.size()) {
+            LOGGER.info("WAC: All effective authorizations failed validation for agent {} to access resource {}", agentURI, accessedResourceUri);
+            message.fail(403, "All effective authorizations failed validation");
+            return;
+        }
+        
+        ContextBasedAuthorization currentAuth = effectiveAuthorizations.get(currentIndex);
+        LOGGER.info("WAC: Trying authorization {} of {} (from resource: {})", 
+                currentIndex + 1, effectiveAuthorizations.size(), currentAuth.getResourceURI());
+        
+        // For validation, we need to determine which resource URI to validate against
+        // This could be the original artifact URI or a workspace URI from the hierarchy
+        String validationResourceUri = determineValidationResourceUri(accessedResourceUri, currentAuth);
+        
+        contextMessageBox.sendMessage(new ContextMessage.ValidateContextBasedAccess(agentURI, validationResourceUri))
+            .onSuccess(r -> {
+                LOGGER.info("WAC: Authorization validation succeeded for agent {} using authorization from resource {} (index {})", 
+                        agentURI, currentAuth.getResourceURI(), currentIndex + 1);
+                message.reply(true);
+            })
+            .onFailure(t -> {
+                LOGGER.info("WAC: Authorization validation failed for agent {} using authorization from resource {} (index {}): {}", 
+                        agentURI, currentAuth.getResourceURI(), currentIndex + 1, t.getMessage());
+                // Try the next authorization
+                validateNextAuthorization(agentURI, accessedResourceUri, accessType, effectiveAuthorizations, currentIndex + 1, message);
+            });
+    }
+
+    /**
+     * Determines which resource URI to use for validation based on the authorization source.
+     */
+    private String determineValidationResourceUri(String originalResourceUri, ContextBasedAuthorization authorization) {
+        // If the authorization comes from a workspace, we should validate against that workspace
+        if (authorization.getResourceURI().contains("#workspace")) {
+            return authorization.getResourceURI();
+        }
+        // Otherwise, validate against the original resource
+        return originalResourceUri;
     }
 }

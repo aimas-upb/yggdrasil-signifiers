@@ -1,0 +1,20 @@
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix consert: <http://pervasive.semanticweb.org/ont/2017/07/consert/core#> .
+@prefix ann: <http://pervasive.semanticweb.org/ont/2017/07/consert/annotation#> .
+@prefix acl: <http://www.w3.org/ns/auth/acl#> .
+@prefix cashmere: <https://aimas.cs.pub.ro/ont/cashmere#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix ex: <http://example.org/> .
+
+# CASHMERE authorization for test_agent at artifact level - always allow
+<http://example.org/allowTestAgentArtifact> a cashmere:ContextBasedAuthorization ;
+    acl:accessTo <http://localhost:8080/workspaces/lab308/artifacts/light308#artifact> ;
+    acl:mode acl:Write ;
+    acl:agent <http://localhost:8080/agents/test_agent> ;
+    cashmere:hasAccessCondition <http://example.org/alwaysAllow> .
+
+# Always allow condition  
+<http://example.org/alwaysAllow> a cashmere:ContextBasedAccessCondition ;
+    sh:severity sh:Info .

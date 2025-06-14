@@ -29,6 +29,7 @@ enum MessageRequestMethods {
   // WAC
   AUTHORIZE_ACCESS("authorizeAccess"),
   GET_WAC_RESOURCE("getWACResource"),
+  VALIDATE_WORKSPACE_CONTEXT_BASED_ACCESS("validateWorkspaceContextBasedAccess"),
   ;
 
   private static final String PREFIX = "org.hyperagents.yggdrasil.eventbus.methods.";

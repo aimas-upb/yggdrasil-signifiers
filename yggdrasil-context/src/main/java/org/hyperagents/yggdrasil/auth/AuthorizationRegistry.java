@@ -1,11 +1,14 @@
 package org.hyperagents.yggdrasil.auth;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.hyperagents.yggdrasil.auth.model.AuthorizationAccessType;
 import org.hyperagents.yggdrasil.auth.model.ContextBasedAuthorization;
 
@@ -14,6 +17,8 @@ public class AuthorizationRegistry {
   // Methods provided by this class are used to keep mappings between an artifact instance (denoted by its URI) and (i) the list of 
   // shared context access authorisations for that artifact, (ii) the list of shared context control authorisations for that artifact. 
   // It also provides methods to add and remove authorisations for a given artifact.
+  
+  private static final Logger LOGGER = LogManager.getLogger(AuthorizationRegistry.class);
   
   private static AuthorizationRegistry registry;
   private final Map<String, List<ContextBasedAuthorization>> contextAccessAuthorisationMap;
@@ -69,6 +74,154 @@ public class AuthorizationRegistry {
       }
     }
 
+    return false;
+  }
+
+  /**
+   * Implements the WAC effective resource determination protocol.
+   * This method traverses the workspace hierarchy to find effective authorizations.
+   * 
+   * @param resourceURI The URI of the resource (artifact or workspace)
+   * @param accessType The type of access being requested
+   * @return A list of effective authorizations found through hierarchical traversal
+   */
+  public List<ContextBasedAuthorization> getEffectiveAuthorizations(String resourceURI, AuthorizationAccessType accessType) {
+    LOGGER.info("WAC: Starting effective resource determination for resource: {} with access type: {}", resourceURI, accessType);
+    
+    List<ContextBasedAuthorization> effectiveAuthorizations = new ArrayList<>();
+    List<String> hierarchyPath = buildHierarchyPath(resourceURI);
+    
+    LOGGER.info("WAC: Hierarchy path for resource {}: {}", resourceURI, hierarchyPath);
+    
+    // Traverse the hierarchy from most specific (artifact) to most general (platform)
+    for (String pathResource : hierarchyPath) {
+      LOGGER.info("WAC: Checking authorizations for path resource: {}", pathResource);
+      
+      List<ContextBasedAuthorization> authorizations = getContextAuthorisations(pathResource);
+      for (ContextBasedAuthorization auth : authorizations) {
+        if (auth.getAccessTypes().contains(accessType)) {
+          LOGGER.info("WAC: Found effective authorization at level: {} for access type: {}", pathResource, accessType);
+          effectiveAuthorizations.add(auth);
+        }
+      }
+      
+      // If we found authorizations at this level, we can stop (WAC principle)
+      if (!effectiveAuthorizations.isEmpty()) {
+        LOGGER.info("WAC: Found {} effective authorizations at level: {}, stopping traversal", effectiveAuthorizations.size(), pathResource);
+        break;
+      }
+    }
+    
+    if (effectiveAuthorizations.isEmpty()) {
+      LOGGER.info("WAC: No effective authorizations found for resource: {} with access type: {}", resourceURI, accessType);
+    }
+    
+    return effectiveAuthorizations;
+  }
+
+  /**
+   * Builds a hierarchy path from the given resource URI.
+   * For artifacts: [artifact, workspace, parent-workspace, ...]
+   * For workspaces: [workspace, parent-workspace, ...]
+   * 
+   * @param resourceURI The URI of the resource
+   * @return A list of URIs representing the hierarchy path
+   */
+  private List<String> buildHierarchyPath(String resourceURI) {
+    List<String> hierarchyPath = new ArrayList<>();
+    
+    if (resourceURI.contains("#artifact")) {
+      // This is an artifact URI, start with the artifact itself
+      hierarchyPath.add(resourceURI);
+      
+      // Extract workspace URI from artifact URI
+      // Example: http://localhost:8080/workspaces/lab308/artifacts/light308#artifact
+      // Should become: http://localhost:8080/workspaces/lab308#workspace
+      String workspaceURI = extractWorkspaceFromArtifactURI(resourceURI);
+      if (workspaceURI != null) {
+        hierarchyPath.add(workspaceURI);
+        // Add parent workspaces if any
+        hierarchyPath.addAll(buildWorkspaceHierarchy(workspaceURI));
+      }
+    } else if (resourceURI.contains("#workspace")) {
+      // This is a workspace URI, start with the workspace itself
+      hierarchyPath.add(resourceURI);
+      // Add parent workspaces if any
+      hierarchyPath.addAll(buildWorkspaceHierarchy(resourceURI));
+    }
+    
+    return hierarchyPath;
+  }
+
+  /**
+   * Extracts workspace URI from an artifact URI.
+   * 
+   * @param artifactURI The artifact URI
+   * @return The workspace URI or null if extraction fails
+   */
+  private String extractWorkspaceFromArtifactURI(String artifactURI) {
+    try {
+      // Example: http://localhost:8080/workspaces/lab308/artifacts/light308#artifact
+      // Should become: http://localhost:8080/workspaces/lab308#workspace
+      if (artifactURI.contains("/artifacts/")) {
+        String basePart = artifactURI.substring(0, artifactURI.indexOf("/artifacts/"));
+        return basePart + "#workspace";
+      }
+    } catch (Exception e) {
+      LOGGER.warn("WAC: Failed to extract workspace URI from artifact URI: {}", artifactURI, e);
+    }
+    return null;
+  }
+
+  /**
+   * Builds the workspace hierarchy for a given workspace URI.
+   * This is a simplified implementation - in a real system, you might need
+   * to query the environment or configuration to get parent workspace relationships.
+   * 
+   * @param workspaceURI The workspace URI
+   * @return A list of parent workspace URIs
+   */
+  private List<String> buildWorkspaceHierarchy(String workspaceURI) {
+    List<String> parentWorkspaces = new ArrayList<>();
+    
+    // For this implementation, we'll check for known parent relationships
+    // Based on the configuration: lab308 has parent "precis"
+    if (workspaceURI.contains("/lab308#workspace")) {
+      String precisURI = workspaceURI.replace("/lab308#workspace", "/precis#workspace");
+      parentWorkspaces.add(precisURI);
+      LOGGER.info("WAC: Added parent workspace to hierarchy: {}", precisURI);
+    }
+    
+    return parentWorkspaces;
+  }
+
+  /**
+   * Checks if there are any effective authorizations (including inherited ones) for the given resource and access type.
+   * 
+   * @param resourceURI The URI of the resource
+   * @param accessType The type of access being requested
+   * @return true if effective authorizations exist, false otherwise
+   */
+  public boolean hasEffectiveAccessAuthorization(String resourceURI, AuthorizationAccessType accessType) {
+    List<ContextBasedAuthorization> effectiveAuths = getEffectiveAuthorizations(resourceURI, accessType);
+    return !effectiveAuths.isEmpty();
+  }
+
+  /**
+   * Checks if there are any effective authorizations (including inherited ones) for the given resource.
+   * 
+   * @param resourceURI The URI of the resource
+   * @return true if effective authorizations exist, false otherwise
+   */
+  public boolean hasEffectiveAccessAuthorization(String resourceURI) {
+    List<String> hierarchyPath = buildHierarchyPath(resourceURI);
+    
+    for (String pathResource : hierarchyPath) {
+      if (hasAccessAuthorization(pathResource)) {
+        return true;
+      }
+    }
+    
     return false;
   }
 

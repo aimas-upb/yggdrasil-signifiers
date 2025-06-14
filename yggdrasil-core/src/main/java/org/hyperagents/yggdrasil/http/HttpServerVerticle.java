@@ -164,6 +164,7 @@ public class HttpServerVerticle extends AbstractVerticle {
         .consumes(TURTLE_CONTENT_TYPE)
         .handler(handler::handleCreateArtifact);
     final var createArtifactRoute = router.post("/workspaces/:wkspid/artifacts/")
+        .handler(wacHandler::filterWorkspaceAccess)  // Add WAC filtering here
         .handler(handler::handleCreateArtifact);
 
     // Artifact and Body paths

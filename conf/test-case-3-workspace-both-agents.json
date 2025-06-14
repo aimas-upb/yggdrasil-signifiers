@@ -12,6 +12,11 @@
       "name" : "alex_agent",
       "agent-uri" : "http://localhost:8080/agents/alex",
       "callback-uri" : "http://localhost:8081/"
+    },
+    {
+      "name" : "test_agent",
+      "agent-uri" : "http://localhost:8080/agents/test_agent",
+      "callback-uri" : "http://localhost:8082/"
     }
   ],
   "environment-config" : {
@@ -34,12 +39,10 @@
               "blue"
             ],
             "focused-by" : ["alex_agent"],
-            "representation": "/home/pasca/Desktop/yggdrasil-signifiers/yggdrasil-context/src/test/resources/td/light308_auth_artifact_td.ttl",
-            "access-policy-url": 
-              "file:///home/pasca/Desktop/yggdrasil-signifiers/yggdrasil-context/src/test/resources/context/upb-hmas-context-access-condition-shapes.ttl"
+            "representation": "/home/pasca/Desktop/yggdrasil-signifiers/yggdrasil-context/src/test/resources/td/light308_auth_artifact_td.ttl"
           }
         ],
-        "joined-by" : ["alex_agent"]
+        "joined-by" : ["alex_agent", "test_agent"]
       },
       {
         "name" : "precis"
@@ -82,7 +85,7 @@
     "workspace-policies": [
       {
         "workspace-uri": "http://localhost:8080/workspaces/lab308#workspace",
-        "policy-file": "file:///home/pasca/Desktop/yggdrasil-signifiers/yggdrasil-context/src/test/resources/context/lab308-deny-all.ttl"
+        "policy-file": "file:///home/pasca/Desktop/yggdrasil-signifiers/yggdrasil-context/src/test/resources/context/lab308-workspace-both-agents.ttl"
       }
     ]
   }

@@ -36,6 +36,8 @@ import org.eclipse.rdf4j.repository.sail.SailRepositoryConnection;
 import org.eclipse.rdf4j.rio.RDFFormat;
 import org.eclipse.rdf4j.rio.RDFParseException;
 import org.eclipse.rdf4j.sail.memory.MemoryStore;
+import org.eclipse.rdf4j.model.Model;
+import org.eclipse.rdf4j.rio.Rio;
 import org.eclipse.rdf4j.sail.shacl.ShaclSail;
 import org.hyperagents.yggdrasil.auth.model.CASHMERE;
 import org.hyperagents.yggdrasil.context.ContextDomain;
@@ -86,6 +88,9 @@ public class ContextMgmtVerticle extends AbstractVerticle {
     // access to a particular Artifact.
     private SailRepository contextAccessConditionsRepo;
     private Map<String, String> artifactPolicies;
+
+    // Add workspace policies map alongside artifact policies
+    private final Map<String, String> workspacePolicies = new HashMap<>();
 
     @Override
     public void start(final Promise<Void> startPromise) {
@@ -282,6 +287,27 @@ public class ContextMgmtVerticle extends AbstractVerticle {
 
         // read the artifact-policies JSON object from the known-artifacts part of the envConfig
         for (var wsp : env.getWorkspaces()) {
+            // Handle workspace-level policies
+            if (wsp.getContextAccessPolicyURL().isPresent()) {
+                String workspaceURL = httpConfig.getWorkspaceUri(wsp.getName()) + "#workspace";
+                workspacePolicies.put(workspaceURL, wsp.getContextAccessPolicyURL().get());
+                
+                try {
+                    Model workspacePolicyModel = Rio.parse(new URL(wsp.getContextAccessPolicyURL().get()).openStream(), "", RDFFormat.TURTLE);
+                    try (SailRepositoryConnection conn = contextAccessConditionsRepo.getConnection()) {
+                        conn.begin();
+                        conn.add(workspacePolicyModel, conn.getValueFactory().createIRI(workspaceURL));
+                        conn.commit();
+                    }
+                    LOGGER.info("Context access conditions for workspace " + workspaceURL + " loaded successfully.");
+                } catch (Exception e) {
+                    LOGGER.error("Error reading the RDF content of the context access conditions for workspace " + workspaceURL + " from the source: " + wsp.getContextAccessPolicyURL().get() 
+                        + ". Reason: " + e.getMessage());
+                    throw new Exception("Error setting up context access conditions repository", e);
+                }
+            }
+            
+            // Handle artifact-level policies (existing code)
             for (var artifact : wsp.getArtifacts()) {
                 if (artifact.getContextAccessPolicyURL().isPresent()) {
                     // form the URL path that will correspond at runtime to this artifact
@@ -329,6 +355,10 @@ public class ContextMgmtVerticle extends AbstractVerticle {
                         case ContextMessage.ValidateContextBasedAccess msgContent -> {
                             LOGGER.info("Handling Context-based access validation action...");
                             validateContextBasedAccess(msgContent.accessRequesterURI(), msgContent.accessedResourceURI(), message);
+                        }
+                        case ContextMessage.ValidateWorkspaceContextBasedAccess msgContent -> {
+                            LOGGER.info("Handling Workspace Context-based access validation action...");
+                            validateWorkspaceContextBasedAccess(msgContent.accessRequesterURI(), msgContent.accessedWorkspaceURI(), message);
                         }
                         case ContextMessage.GetStaticContext msgContent -> {
                             LOGGER.info("Handling GetStaticContext action...");
@@ -599,4 +629,97 @@ public class ContextMgmtVerticle extends AbstractVerticle {
         return Optional.empty();
     }
 
+    private boolean isWorkspaceAccessProtected(String workspaceURI) {
+        return workspacePolicies.containsKey(workspaceURI);
+    }
+
+    private Optional<List<Statement>> getWorkspaceAccessConditions(String workspaceURI) {
+        // get the URI of the named graph containing the access conditions for the workspace
+        String accessConditionsGraphURI = workspacePolicies.get(workspaceURI);
+
+        if (accessConditionsGraphURI == null) {
+            return Optional.empty();
+        }
+
+        // get the statements in the named graph
+        try (RepositoryConnection conn = contextAccessConditionsRepo.getConnection()) {
+            return Optional.of(Iterations.asList(conn.getStatements(null, null, null, true, conn.getValueFactory().createIRI(workspaceURI))));
+        } catch (RepositoryException e) {
+            LOGGER.error("Error accessing the context access conditions repository: " + e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    private void validateWorkspaceContextBasedAccess(String accessRequesterURI, String accessedWorkspaceURI, Message<ContextMessage> message) {
+        // If the workspace is not access protected, allow access by default
+        if (!isWorkspaceAccessProtected(accessedWorkspaceURI)) {
+            message.reply(true);
+            LOGGER.info("Access to workspace " + accessedWorkspaceURI + " allowed for access requester: " 
+                        + accessRequesterURI + ". Reason: No access conditions found.");
+            return;
+        }
+
+        // Create a context data repository to store validation data 
+        ShaclSail shaclSailData = new ShaclSail(new MemoryStore());
+        SailRepository contextDataRepo = new SailRepository(shaclSailData);
+        contextDataRepo.init();
+
+        // add static, profiled and dynamic context data to the validation repository
+        addStaticContext(contextDataRepo, accessedWorkspaceURI, accessRequesterURI);
+        addProfiledContext(contextDataRepo, accessedWorkspaceURI, accessRequesterURI);
+        addDynamicContext(contextDataRepo, accessedWorkspaceURI, accessRequesterURI);
+
+        // now we need to add the SHACL shapes graph containing the access conditions for the workspace to the validationDataRepo
+        Optional<List<Statement>> accessConditions = getWorkspaceAccessConditions(accessedWorkspaceURI);
+        if (accessConditions.isPresent()) {
+            // create a Validation Repository as a ShaclSail in memory store
+            ShaclSail shaclSailValidation = new ShaclSail(new MemoryStore());
+            shaclSailValidation.setLogValidationViolations(true);
+            shaclSailValidation.setGlobalLogValidationExecution(true);
+            shaclSailValidation.setRdfsSubClassReasoning(true);
+            SailRepository validationRepo = new SailRepository(shaclSailValidation);
+            validationRepo.init();
+
+            // Replace the `cashmere:accessRequester` object placeholder in the access conditions with the actual accessRequesterURI
+            List<Statement> customAccessConditions = customizeAccessConditions(accessConditions.get(), accessRequesterURI, accessedWorkspaceURI);
+            try (SailRepositoryConnection conn = validationRepo.getConnection()) {
+                // load the access conditions into the profiledContextRepo, under the RDF4J.SHACL_SHAPE_GRAPH context
+                conn.begin();
+                conn.add(customAccessConditions, RDF4J.SHACL_SHAPE_GRAPH);
+                
+                // load the context data from the contextDataRepo into the validationRepo
+                conn.add(contextDataRepo.getConnection().getStatements(null, null, null, true));
+                conn.commit();
+
+                // trigger SHACL validation by accessing the connection
+                conn.prepareBooleanQuery("ASK { ?s ?p ?o }").evaluate();
+
+                message.reply(true);
+                LOGGER.info("Access to workspace " + accessedWorkspaceURI + " allowed for access requester: " 
+                        + accessRequesterURI + ". Reason: Context validation successful.");
+            } catch (Exception e) {
+                Throwable cause = e.getCause();
+                if (cause instanceof ValidationException) {
+                    LOGGER.info("Access to workspace " + accessedWorkspaceURI + " denied for access requester: " 
+                        + accessRequesterURI + ". Reason:  " + cause.getMessage()); 
+                } else {
+                    LOGGER.error("Error validating the access conditions of workspace: " + accessedWorkspaceURI 
+                        + " for requester: " + accessRequesterURI +  " against the profiled context repository: " + e.getMessage());
+                }
+
+                // in case of error, deny access
+                message.fail(403, "Access denied. Reason: " + (cause != null ? cause.getMessage() : "Unknown error"));
+            }
+            finally {
+                // close the validationRepo
+                validationRepo.shutDown();
+            }
+        }
+        else {
+            // If no access conditions are found, allow access by default
+            LOGGER.info("No access conditions found in policy for workspace " + accessedWorkspaceURI + ". Access allowed by default.");
+            message.reply(true);
+            return;
+        }
+    }
 }

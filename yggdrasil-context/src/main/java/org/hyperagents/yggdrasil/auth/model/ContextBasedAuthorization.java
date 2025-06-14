@@ -186,7 +186,7 @@ public class ContextBasedAuthorization {
     // identify the subject of the authorization 
     Set<Resource> ctxAuthorizations = contextAuthModel.filter(null, RDF.TYPE, CASHMERE.ContextBasedAuthorization).subjects();
     
-    // for each authorization, get the resource to which access is being given, the access type, and the ContextDomain Group URI  receiving access
+    // for each authorization, get the resource to which access is being given, the access type, and the agent receiving access
     for (Resource sharedCtxAuth : ctxAuthorizations) {
       try {
         String accessedResourceUri = contextAuthModel.filter(sharedCtxAuth, ACL.accessTo, null).iterator().next().getObject().stringValue();
@@ -194,6 +194,30 @@ public class ContextBasedAuthorization {
           contextAuthModel.filter(sharedCtxAuth, ACL.mode, null).objects()
             .stream().map(accessTypeIRI -> AuthorizationAccessType.fromUri(accessTypeIRI.stringValue()).get()).collect(Collectors.toList());
         
+        // Get the agent/entity that is authorized
+        String authorizedEntityURI = CASHMERE.accessRequester.stringValue(); // default
+        AuthorizedEntityType authorizedEntityType = AuthorizedEntityType.AGENT;
+        
+        // Check for specific agent authorization
+        Set<Value> agents = contextAuthModel.filter(sharedCtxAuth, ACL.agent, null).objects();
+        if (!agents.isEmpty()) {
+          authorizedEntityURI = agents.iterator().next().stringValue();
+          authorizedEntityType = AuthorizedEntityType.AGENT;
+        } else {
+          // Check for agent class authorization
+          Set<Value> agentClasses = contextAuthModel.filter(sharedCtxAuth, ACL.agentClass, null).objects();
+          if (!agentClasses.isEmpty()) {
+            authorizedEntityURI = agentClasses.iterator().next().stringValue();
+            authorizedEntityType = AuthorizedEntityType.AGENT_CLASS;
+          } else {
+            // Check for agent group authorization
+            Set<Value> agentGroups = contextAuthModel.filter(sharedCtxAuth, ACL.agentGroup, null).objects();
+            if (!agentGroups.isEmpty()) {
+              authorizedEntityURI = agentGroups.iterator().next().stringValue();
+              authorizedEntityType = AuthorizedEntityType.AGENT_GROUP;
+            }
+          }
+        }
         
         Set<Value> accessConditionShapes = contextAuthModel.filter(sharedCtxAuth, CASHMERE.hasAccessCondition, null).objects();
         for (Value accessConditionShape : accessConditionShapes) {
@@ -201,7 +225,7 @@ public class ContextBasedAuthorization {
           
           // create the authorization object
           ContextBasedAuthorization ctxAccessAuth = new ContextBasedAuthorization(accessedResourceUri, accessTypes, 
-              AuthorizedEntityType.AGENT, CASHMERE.accessRequester.stringValue(), accessConditionShapeURI);
+              authorizedEntityType, authorizedEntityURI, accessConditionShapeURI);
           
           // add the authorization to the list
           sharedCtxAuths.add(ctxAccessAuth);

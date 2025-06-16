@@ -232,6 +232,10 @@ public class HttpServerVerticle extends AbstractVerticle {
     final Route contextDomainRepresentation = router.get(CONTEXT_DOMAIN_PATH)
         .handler(contextHandler::handleGetContextDomain);
 
+    final Route addContextDomain = router.post("/context/domains")
+        .consumes("application/json")
+        .handler(contextHandler::handleAddContextDomain);
+
     final Route contextStreamRepresentation = router.get(CONTEXT_STREAM_PATH)
         .handler(contextHandler::handleContextStreamRepresentation);
 
@@ -260,7 +264,9 @@ public class HttpServerVerticle extends AbstractVerticle {
       contextStreamSubscriptionVerification.disable();
       contextStreamRepresentation.disable();
       addContextStream.disable();
+      removeContextStream.disable();
       contextDomainRepresentation.disable();
+      addContextDomain.disable();
       containsAssertionRoute.disable();
       staticContext.disable();
       addStaticContext.disable();

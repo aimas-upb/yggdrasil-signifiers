@@ -46,6 +46,7 @@ public class ContextMgmtHandler {
 
     // List of ContextStreams that are being managed by the Context Management service
     private final List<String> managedContextStreamURIs = new ArrayList<>();
+    private final List<String> managedContextDomainURIs = new ArrayList<>();
 
     public ContextMgmtHandler(Vertx vertx, final ContextManagementConfig contextManagementConfig) {
         this.vertx = vertx;
@@ -55,8 +56,14 @@ public class ContextMgmtHandler {
         for (ContextStreamModel streamModel : contextManagementConfig.getContextStreams()) {
             managedContextStreamURIs.add(streamModel.getStreamUri());
         }
-    }
 
+        // Initialize the ContextDomains that are being managed by the Context Management service
+        for (ContextDomainModel domainModel : contextManagementConfig.getContextDomains()) {
+            managedContextDomainURIs.add(domainModel.getDomainUri());
+        }
+        LOGGER.info("Context Management Handler initialized with {} managed Context Streams and {} managed Context Domains.",
+            managedContextStreamURIs.size(), managedContextDomainURIs.size());
+    }
     /**
      * Method to handle a request to retrieve the static context graph managed by the Context Management Service.
      * 
@@ -251,8 +258,15 @@ public class ContextMgmtHandler {
                 .addSemanticType("https://purl.org/hmas/AddContextDomainAction")
                 .addInputSchema(
                     new ObjectSchema.Builder()
-                        .addProperty("domainURI", new StringSchema.Builder().build())
-                        .addProperty("membershipRules", new ArraySchema.Builder().build())
+                        .addProperty("contextDomainURI", new StringSchema.Builder().build())
+                        .addProperty("contextDomainConfig", 
+                            new ObjectSchema.Builder()
+                                .addProperty("engineConfigURL", new StringSchema.Builder().build())
+                                .addProperty("membershipRules", new ArraySchema.Builder()
+                                    .addItem(new StringSchema.Builder().build()).build())
+                                .addProperty("requiredStreamURIs", new ArraySchema.Builder()
+                                    .addItem(new StringSchema.Builder().build()).build())
+                                .build())
                         .build())
                 .build()
         );
@@ -337,16 +351,7 @@ public class ContextMgmtHandler {
           );
       }
 
-      // Link to context domains
-      List<String> contextDomainURIs = vertx.sharedData()
-          .<String, ContextManagementConfig>getLocalMap("context-management-config")
-          .get("default")
-          .getContextDomains()
-          .stream()
-          .map(ContextDomainModel::getDomainUri)
-          .toList();
-
-      for (String domainURI : contextDomainURIs) {
+      for (String domainURI : managedContextDomainURIs) {
           serviceMetadata.add(
               serviceIri,
               RdfModelUtils.createIri("https://purl.org/hmas/hasContextDomain"), 
@@ -819,6 +824,86 @@ public class ContextMgmtHandler {
                     .setStatusCode(500)
                     .putHeader("Content-Type", "application/json")
                     .end(new JsonObject().put("error", t.getMessage()).encode());
+            });
+    }
+    
+    /**
+     * Method to handle a request to add a new ContextDomain to the Context Management Service.
+     * 
+     * @param context The Vert.x routing context of the request
+     */
+    public void handleAddContextDomain(RoutingContext context) {
+        LOGGER.info("Handling Context Domain addition action...");
+        
+        JsonObject requestBody = context.body().asJsonObject();
+        if (requestBody == null) {
+            LOGGER.warn("Request body is null");
+            context.response()
+                .setStatusCode(400)
+                .putHeader("Content-Type", "application/json")
+                .end(new JsonObject().put("error", "Request body is required").encode());
+            return;
+        }
+
+        // Extract required fields from the request body
+        String contextDomainURI = requestBody.getString("contextDomainURI");
+        JsonObject contextDomainConfigJson = requestBody.getJsonObject("contextDomainConfig");
+
+        if (contextDomainURI == null || contextDomainURI.trim().isEmpty()) {
+            LOGGER.warn("Missing or empty contextDomainURI in request body");
+            context.response()
+                .setStatusCode(400)
+                .putHeader("Content-Type", "application/json")
+                .end(new JsonObject().put("error", "Missing required 'contextDomainURI' parameter").encode());
+            return;
+        }
+
+        if (contextDomainConfigJson == null) {
+            LOGGER.warn("Missing or empty contextDomainConfig in request body");
+            context.response()
+                .setStatusCode(400)
+                .putHeader("Content-Type", "application/json")
+                .end(new JsonObject().put("error", "Missing required 'contextDomainConfig' parameter").encode());
+            return;
+        }
+
+        String contextDomainConfig = contextDomainConfigJson.encode();
+
+        // Send the message to the Context Management Verticle
+        this.contextMessageBox.sendMessage(new ContextMessage.AddContextDomain(
+                contextDomainURI, contextDomainConfig))
+            .onSuccess(r -> {
+                LOGGER.info("Context domain added successfully: " + contextDomainURI);
+                context.response()
+                    .setStatusCode(201)
+                    .putHeader("Content-Type", "application/json")
+                    .end(new JsonObject()
+                        .put("message", "Context domain added successfully")
+                        .put("contextDomainURI", contextDomainURI)
+                        .encode());
+                // Add the new domain URI to the managed context domains
+                if (!managedContextDomainURIs.contains(contextDomainURI)) {
+                    managedContextDomainURIs.add(contextDomainURI);
+                    LOGGER.info("Added new context domain URI to managed context domains: " + contextDomainURI);
+                } else {
+                    LOGGER.info("Context domain URI already exists in managed context domains: " + contextDomainURI);
+                }
+                LOGGER.info("Updated managed context domains: " + managedContextDomainURIs);
+            })
+            .onFailure(t -> {
+                LOGGER.error("Error adding context domain: " + contextDomainURI, t);
+                if (t instanceof ReplyException) {
+                    ReplyException re = (ReplyException) t;
+                    context.response()
+                        .setStatusCode(re.failureCode())
+                        .putHeader("Content-Type", "application/json")
+                        .end(new JsonObject().put("error", re.getMessage()).encode());
+                } else {
+                    context.response()
+                        .setStatusCode(500)
+                        .putHeader("Content-Type", "application/json")
+                        .end(new JsonObject().put("error", "Internal server error").encode());
+                }
             });
     }
 }

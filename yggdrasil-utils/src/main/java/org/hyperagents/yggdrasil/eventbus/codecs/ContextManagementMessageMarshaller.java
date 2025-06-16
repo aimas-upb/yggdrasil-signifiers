@@ -60,6 +60,10 @@ public class ContextManagementMessageMarshaller
             case REMOVE_CONTEXT_STREAM -> new ContextMessage.RemoveContextStream(
                 jsonObject.get(MessageFields.STREAM_URI.getName()).getAsString()
             );
+            case ADD_CONTEXT_DOMAIN -> new ContextMessage.AddContextDomain(
+                jsonObject.get(MessageFields.CONTEXT_DOMAIN_URI.getName()).getAsString(),
+                jsonObject.get(MessageFields.CONTEXT_DOMAIN_CONFIG.getName()).getAsString()
+            );
             default -> throw new JsonParseException("The request method is not valid");
         };
     }
@@ -68,6 +72,12 @@ public class ContextManagementMessageMarshaller
     public JsonElement serialize(ContextMessage contextMsg, Type type, JsonSerializationContext jsonContext) {
         final var jsonObject = new JsonObject();
         switch(contextMsg) {
+            case ContextMessage.AddContextDomain addContextDomain -> {
+                jsonObject.addProperty(MessageFields.REQUEST_METHOD.getName(), MessageRequestMethods.ADD_CONTEXT_DOMAIN.getName());
+                jsonObject.addProperty(MessageFields.CONTEXT_DOMAIN_URI.getName(), addContextDomain.contextDomainURI());
+                jsonObject.addProperty(MessageFields.CONTEXT_DOMAIN_CONFIG.getName(), addContextDomain.contextDomainConfig());
+            }
+
             case ContextMessage.ContainsAssertion containsAssertion -> {
                 jsonObject.addProperty(MessageFields.REQUEST_METHOD.getName(), MessageRequestMethods.CONTAINS_ASSERTION.getName());
                 jsonObject.addProperty(MessageFields.CONTEXT_ASSERTION_TYPE.getName(), containsAssertion.contextAssertionType());

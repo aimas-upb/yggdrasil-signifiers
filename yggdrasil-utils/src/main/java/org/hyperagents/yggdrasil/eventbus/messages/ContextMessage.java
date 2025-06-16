@@ -133,4 +133,16 @@ public sealed interface ContextMessage {
      */
     record RemoveContextStream(String streamURI) implements ContextMessage {
     }
+
+    /**
+     * A record representing a request to add a new ContextDomain to the Context Management Service.
+     * 
+     * <p> The contextDomainURI is the URI of the Context Domain to be added.
+     * <p> The contextDomainConfig contains configuration details for the Context Domain, such as its ontology URL and other settings.
+     * 
+     * @param contextDomainURI The URI of the Context Domain to be added.
+     * @param contextDomainConfig The configuration details for the Context Domain.
+     */
+    record AddContextDomain(String contextDomainURI, String contextDomainConfig) implements ContextMessage {
+    }
 }

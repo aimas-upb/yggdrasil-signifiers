@@ -1,6 +1,8 @@
 package org.hyperagents.yggdrasil.eventbus.codecs;
 
 enum MessageFields {
+  CONTEXT_DOMAIN_CONFIG("contextDomainConfig"),
+  CONTEXT_DOMAIN_URI("contextDomainURI"),
   REQUEST_METHOD("requestMethod"),
   REQUEST_URI("requestUri"),
   ENTITY_URI_HINT("slug"),

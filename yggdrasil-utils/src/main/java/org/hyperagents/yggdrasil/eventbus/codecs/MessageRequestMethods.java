@@ -4,6 +4,8 @@ import java.util.Arrays;
 import java.util.Optional;
 
 enum MessageRequestMethods {
+  ADD_CONTEXT_DOMAIN("addContextDomain"),
+  DELETE_CONTEXT_DOMAIN("deleteContextDomain"),
   GET_ENTITY("getEntity"),
   GET_ENTITY_IRI("getEntityIri"),
   UPDATE_ENTITY("updateEntity"),

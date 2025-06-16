@@ -10,6 +10,7 @@ import java.net.URI;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -662,6 +663,90 @@ public class ContextMgmtVerticle extends AbstractVerticle {
                                     "Error processing context stream removal: " + e.getMessage());
                             }
                         }
+                        case ContextMessage.AddContextDomain addContextDomain -> {
+                            LOGGER.info("Handling AddContextDomain request for URI: " + addContextDomain.contextDomainURI());
+                            try {
+                                String contextDomainURI = addContextDomain.contextDomainURI();
+                                String contextDomainConfigStr = addContextDomain.contextDomainConfig();
+                                
+                                // Parse the nested configuration JSON
+                                JsonObject contextDomainConfig = new JsonObject(contextDomainConfigStr);
+                                String engineConfigURL = contextDomainConfig.getString("engineConfigURL");
+                                List<String> membershipRules = contextDomainConfig.getJsonArray("membershipRules") != null ?
+                                    contextDomainConfig.getJsonArray("membershipRules").stream()
+                                        .map(Object::toString)
+                                        .toList() : List.of();
+                                List<String> requiredStreamURIs = contextDomainConfig.getJsonArray("requiredStreamURIs") != null ?
+                                    contextDomainConfig.getJsonArray("requiredStreamURIs").stream()
+                                        .map(Object::toString)
+                                        .toList() : List.of();
+
+                                // Validate required fields
+                                if (engineConfigURL == null || engineConfigURL.isEmpty()) {
+                                    LOGGER.warn("Missing or empty engineConfigURL in context domain config");
+                                    message.fail(HttpStatus.SC_BAD_REQUEST, 
+                                        "Missing required 'engineConfigURL' in context domain config");
+                                    return;
+                                }
+
+                                if (membershipRules.isEmpty()) {
+                                    LOGGER.warn("Missing or empty membershipRules in context domain config");
+                                    message.fail(HttpStatus.SC_BAD_REQUEST, 
+                                        "At least one membership rule is required in context domain config");
+                                    return;
+                                }
+
+                                // Check if the domain already exists
+                                if (contextDomains.containsKey(contextDomainURI)) {
+                                    LOGGER.warn("Context domain already exists: " + contextDomainURI);
+                                    message.fail(HttpStatus.SC_CONFLICT, 
+                                        "Context domain already exists: " + contextDomainURI);
+                                    return;
+                                }
+
+                                // Validate that all required streams are available
+                                if (!contextStreamMap.keySet().containsAll(requiredStreamURIs)) {
+                                    Set<String> missingStreams = new HashSet<>(requiredStreamURIs);
+                                    missingStreams.removeAll(contextStreamMap.keySet());
+                                    LOGGER.warn("Required context streams not found. Missing streams: " + missingStreams);
+                                    message.fail(HttpStatus.SC_BAD_REQUEST, 
+                                        "Required context streams not found. Missing streams: " + missingStreams);
+                                    return;
+                                }
+
+                                // Get the required ContextStream objects
+                                List<ContextStream> requiredContextStreams = requiredStreamURIs.stream()
+                                    .map(streamURI -> contextStreamMap.get(streamURI))
+                                    .toList();
+
+                                // Create the new ContextDomain
+                                ContextDomain contextDomain = new ContextDomain(contextDomainURI, 
+                                                                                engineConfigURL, 
+                                                                                membershipRules,
+                                                                                requiredContextStreams);
+                                
+                                // Add to the context domains map
+                                contextDomains.put(contextDomainURI, contextDomain);
+                                
+                                LOGGER.info("Context domain {} added successfully", contextDomainURI);
+                                
+                                // Create a response JSON object with the domain information
+                                JsonObject response = new JsonObject()
+                                    .put("contextDomainURI", contextDomainURI)
+                                    .put("status", "created")
+                                    .put("groupURI", contextDomain.getContextDomainGroupURI())
+                                    .put("membershipRulesCount", membershipRules.size())
+                                    .put("requiredStreamsCount", requiredStreamURIs.size());
+                                
+                                message.reply(response.encode());
+                                LOGGER.info("Successfully created context domain: {}", contextDomainURI);
+                                
+                            } catch (Exception e) {
+                                LOGGER.error("Error processing AddContextDomain request", e);
+                                message.fail(HttpStatus.SC_INTERNAL_SERVER_ERROR, 
+                                    "Error creating context domain: " + e.getMessage());
+                            }
+                        }
                         default -> {
                             LOGGER.warn("Received an unknown message type: " + message.body().getClass().getName());
                             message.fail(HttpStatus.SC_BAD_REQUEST, "Unknown message type.");
@@ -699,6 +784,8 @@ public class ContextMgmtVerticle extends AbstractVerticle {
         
         // Reply to the message with a success message
         message.reply("Stream " + streamURI + " updated successfully.");
+        LOGGER.info("Context stream {} updated successfully with {} statements at timestamp {}", 
+            streamURI, graph.size(), updateTimestamp);
     }
 
     // ============================================================================

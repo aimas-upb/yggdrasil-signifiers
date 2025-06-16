@@ -244,6 +244,46 @@ public class ContextDomain {
         return streamURIs;
     }
 
+    /**
+     * Add a new membership rule to this context domain.
+     * This method registers a new RSPQL query with the existing engine.
+     * 
+     * @param membershipRuleQueryURL The URL of the RSPQL query to add
+     * @throws Exception if there's an error registering the query
+     */
+    public void addMembershipRule(String membershipRuleQueryURL) throws Exception {
+        if (membershipRuleQueries.containsKey(membershipRuleQueryURL)) {
+            LOGGER.warn("Membership rule already exists: " + membershipRuleQueryURL);
+            return;
+        }
+
+        try {
+            // Get the SDS configuration from the existing engine
+            String configFilePath = new URI(engineConfigURL).toURL().getPath();
+            SDSConfiguration config = new SDSConfiguration(configFilePath);
+
+            // Register the new query with the engine
+            JenaContinuousQueryExecution cqe = (JenaContinuousQueryExecution)membershipRuleQueryEngine.register(Utils.parseRSPQLQuery(membershipRuleQueryURL), config);
+            var query = cqe.query();
+            query.setConstruct();
+            cqe.addQueryFormatter(ResponseFormatterFactory.getConstructResponseSysOutFormatter("Turtle", false));
+            
+            // Keep record of the query execution object
+            membershipRuleQueries.put(membershipRuleQueryURL, cqe);
+
+            // Get the result stream and set up the consumer
+            @SuppressWarnings("unchecked")
+            DataStream<Graph> queryResultStream = (DataStream<Graph>)cqe.outstream();
+            queryResultStream.addConsumer((g, t) -> updateMembershipConsumer(g, t));
+            
+            LOGGER.info("Successfully added membership rule: " + membershipRuleQueryURL + " to context domain: " + contextDomainURI);
+            
+        } catch (Exception e) {
+            LOGGER.error("Error adding membership rule: " + membershipRuleQueryURL + " to context domain: " + contextDomainURI, e);
+            throw e;
+        }
+    }
+
     // =============================================================================================================
     // Auxiliary functions to get the URI of the ContextDomainGroup from the URI of the ContextDomain and vice versa
     // =============================================================================================================

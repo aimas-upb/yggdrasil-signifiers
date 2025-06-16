@@ -1,6 +1,10 @@
 package org.hyperagents.yggdrasil.context;
 
+import java.io.ByteArrayOutputStream;
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -9,20 +13,20 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.apache.jena.graph.Graph;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.hyperagents.yggdrasil.utils.HttpInterfaceConfig;
-
-import org.hyperagents.yggdrasil.utils.WebSubConfig;
-import org.hyperagents.yggdrasil.utils.impl.RepresentationFactoryTDImplt;
+import org.eclipse.rdf4j.model.IRI;
+import org.eclipse.rdf4j.model.Model;
+import org.eclipse.rdf4j.model.impl.LinkedHashModel;
+import org.eclipse.rdf4j.model.impl.SimpleValueFactory;
+import org.eclipse.rdf4j.rio.RDFFormat;
+import org.eclipse.rdf4j.rio.RDFWriter;
+import org.eclipse.rdf4j.rio.Rio;
 import org.streamreasoning.rsp4j.api.stream.data.DataStream;
 import org.streamreasoning.rsp4j.io.DataStreamImpl;
-
-import io.vertx.core.Vertx;
 
 
 public class ContextStream {
     
     private static final Logger LOGGER = LogManager.getLogger(ContextStream.class);
-    private static final String DEFAULT_CONFIG_VALUE = "default";
 
     private final String streamName;
     private final String streamURI;
@@ -34,32 +38,186 @@ public class ContextStream {
     /**
      * The URI of the ontology that describes the contents of this stream.
      */
-    private final Optional<String> ontologyURL;
-
-    /**
+    private final Optional<String> ontologyURL;    /**
      * The URIs of the ContextAssertions that are part of this stream.
      */
     private final List<String> contextAssertionTypes = new ArrayList<>();
-    
-    private final WebSubConfig notificationConfig = Vertx.currentContext()
-      .owner()
-      .sharedData()
-      .<String, WebSubConfig>getLocalMap("notification-config")
-      .get(DEFAULT_CONFIG_VALUE);
-  private HttpInterfaceConfig httpConfig = Vertx.currentContext()
-      .owner()
-      .sharedData()
-      .<String, HttpInterfaceConfig>getLocalMap("http-config")
-      .get(DEFAULT_CONFIG_VALUE);
-    private RepresentationFactoryTDImplt representationFactory =
-            new RepresentationFactoryTDImplt(this.httpConfig, this.notificationConfig);
 
     public final String getHypermediaRepresentation() {
-        return this.representationFactory.createContextStreamRepresentation(
-                this.streamName,
-                this.streamURI,
-                this.contextAssertionTypes
-        );
+        try {
+            // Create RDF model
+            Model model = new LinkedHashModel();
+            SimpleValueFactory vf = SimpleValueFactory.getInstance();
+            
+            // Define namespaces
+            String cashmereNS = "https://aimas.cs.pub.ro/ont/cashmere#";
+            String consertNS = "http://pervasive.semanticweb.org/ont/2017/07/consert/core#";
+            String exNS = "http://example.org/";
+            String xsdNS = "http://www.w3.org/2001/XMLSchema#";
+            String owlNS = "http://www.w3.org/2002/07/owl#";
+            String rdfsNS = "http://www.w3.org/2000/01/rdf-schema#";
+            
+            IRI streamIRI = vf.createIRI(this.streamURI);
+            model.add(streamIRI, 
+                     vf.createIRI(cashmereNS + "streamName"), 
+                     vf.createLiteral(this.streamName, vf.createIRI(xsdNS + "string")));
+            model.add(streamIRI, 
+                     vf.createIRI(cashmereNS + "updateMode"), 
+                     vf.createIRI(cashmereNS + "TimePeriodic"));
+                     
+            for (String assertionType : contextAssertionTypes) {
+                IRI assertionIRI = vf.createIRI(assertionType);
+                
+                model.add(streamIRI, vf.createIRI(cashmereNS + "containsAssertion"), assertionIRI);
+                AssertionInfo info = readAssertionFromOntology(assertionType);
+                if (info != null) {
+                    model.add(assertionIRI, 
+                             vf.createIRI(consertNS + "assertionAcquisitionType"), 
+                             vf.createIRI(info.acquisitionType != null ? info.acquisitionType : consertNS + "Sensed"));
+                    
+                    if (info.arityType != null) {
+                        model.add(assertionIRI, 
+                                 vf.createIRI(cashmereNS + "assertionArity"), 
+                                 vf.createIRI(info.arityType));
+                    }
+                    
+                    if (info.subjectType != null) {
+                        model.add(assertionIRI, 
+                                 vf.createIRI(consertNS + "assertionSubject"), 
+                                 vf.createIRI(info.subjectType));
+                    }
+                    
+                    if (info.objectType != null) {
+                        model.add(assertionIRI, 
+                                 vf.createIRI(consertNS + "assertionObject"), 
+                                 vf.createIRI(info.objectType));
+                    }
+                }
+            }
+            
+            try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+                RDFWriter writer = Rio.createWriter(RDFFormat.TURTLE, out);
+                
+                writer.startRDF();
+                
+                writer.handleNamespace("cashmere", cashmereNS);
+                writer.handleNamespace("consert", consertNS);
+                writer.handleNamespace("ex", exNS);
+                writer.handleNamespace("xsd", xsdNS);
+                writer.handleNamespace("rdf", "http://www.w3.org/1999/02/22-rdf-syntax-ns#");
+                writer.handleNamespace("rdfs", rdfsNS);
+                writer.handleNamespace("owl", owlNS);
+                
+                model.forEach(writer::handleStatement);
+                writer.endRDF();
+                
+                return out.toString(StandardCharsets.UTF_8);
+            }
+        } catch (Exception e) {
+            LOGGER.error("Error generating hypermedia representation for stream: " + streamURI, e);
+            return "Error generating representation: " + e.getMessage();
+        }
+    }
+
+    /**
+     * Helper class to store assertion information from ontology
+     */
+    private static class AssertionInfo {
+        String arityType;
+        String acquisitionType;
+        String subjectType;
+        String objectType;
+    }
+
+    /**
+     * Read assertion information from the ontology file
+     */
+    private AssertionInfo readAssertionFromOntology(String assertionTypeURI) {
+        if (ontologyURL.isEmpty()) {
+            LOGGER.warn("No ontology URL provided for stream: " + streamURI);
+            return null;
+        }
+
+        try {
+            AssertionInfo info = new AssertionInfo();
+            
+            // Parse the ontology file
+            String ontologyPath = ontologyURL.get();
+            if (ontologyPath.startsWith("file://")) {
+                ontologyPath = ontologyPath.substring(7); // Remove "file://" prefix
+            }
+            
+            // Read and parse the ontology file
+            final Model ontologyModel;
+            try (FileInputStream fis = new FileInputStream(ontologyPath)) {
+                ontologyModel = Rio.parse(fis, "", RDFFormat.TURTLE);
+            }
+            
+            SimpleValueFactory vf = SimpleValueFactory.getInstance();
+            IRI assertionIRI = vf.createIRI(assertionTypeURI);
+            
+            // Find rdfs:subClassOf statements to determine arity
+            String consertNS = "http://pervasive.semanticweb.org/ont/2017/07/consert/core#";
+            String rdfsNS = "http://www.w3.org/2000/01/rdf-schema#";
+            String owlNS = "http://www.w3.org/2002/07/owl#";
+            
+            IRI rdfsSubClassOf = vf.createIRI(rdfsNS + "subClassOf");
+            
+            ontologyModel.filter(assertionIRI, rdfsSubClassOf, null).forEach(stmt -> {
+                String objectValue = stmt.getObject().stringValue();
+                if (objectValue.contains("BinaryContextAssertion")) {
+                    info.arityType = consertNS + "BinaryContextAssertion";
+                } else if (objectValue.contains("UnaryContextAssertion")) {
+                    info.arityType = consertNS + "UnaryContextAssertion";
+                } else {
+                    info.arityType = consertNS + "NaryContextAssertion";
+                }
+            });
+            
+            // Look for OWL restrictions to find subject and object types
+            IRI owlOnProperty = vf.createIRI(owlNS + "onProperty");
+            IRI owlAllValuesFrom = vf.createIRI(owlNS + "allValuesFrom");
+            IRI assertionSubject = vf.createIRI(consertNS + "assertionSubject");
+            IRI assertionObject = vf.createIRI(consertNS + "assertionObject");
+            IRI assertionAcquisitionType = vf.createIRI(consertNS + "assertionAcquisitionType");
+            
+            // Find restrictions in the ontology
+            ontologyModel.forEach(stmt -> {
+                if (stmt.getSubject().toString().startsWith("_:")) { // Blank node (restriction)
+                    // Check if this restriction is about our assertion
+                    boolean isOurRestriction = ontologyModel.filter(assertionIRI, rdfsSubClassOf, stmt.getSubject()).size() > 0;
+                    
+                    if (isOurRestriction) {
+                        // Find what property this restriction is about
+                        ontologyModel.filter(stmt.getSubject(), owlOnProperty, null).forEach(propStmt -> {
+                            String propertyURI = propStmt.getObject().stringValue();
+                            
+                            // Find the allValuesFrom for this restriction
+                            ontologyModel.filter(stmt.getSubject(), owlAllValuesFrom, null).forEach(valueStmt -> {
+                                String valueType = valueStmt.getObject().stringValue();
+                                
+                                if (propertyURI.equals(assertionSubject.stringValue())) {
+                                    info.subjectType = valueType;
+                                } else if (propertyURI.equals(assertionObject.stringValue())) {
+                                    info.objectType = valueType;
+                                } else if (propertyURI.equals(assertionAcquisitionType.stringValue())) {
+                                    info.acquisitionType = valueType;
+                                }
+                            });
+                        });
+                    }
+                }
+            });
+            
+            return info;
+            
+        } catch (IOException e) {
+            LOGGER.error("Error reading ontology file for assertion: " + assertionTypeURI, e);
+            return null;
+        } catch (Exception e) {
+            LOGGER.error("Error parsing ontology for assertion: " + assertionTypeURI, e);
+            return null;
+        }
     }
 
     public ContextStream(String streamURI, String ontologyURL, List<String> contextAssertionTypes) {

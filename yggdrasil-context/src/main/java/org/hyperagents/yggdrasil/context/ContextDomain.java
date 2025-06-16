@@ -119,7 +119,7 @@ public class ContextDomain {
     // ContextDomain RDF representation
     public String getContextDomainRepresentation() {
         // Transform the list of ContextStreams into a list of their URIs
-        return this.representationFactory.getContextDomainRepresentation(contextDomainURI, getContextDomainGroupURI(), null, 
+        return this.representationFactory.getContextDomainRepresentation(contextDomainURI, getContextDomainGroupURI(), getContextStreamURIs(), 
                 membershipRuleQueryURLs);
     }
 
@@ -230,6 +230,18 @@ public class ContextDomain {
             LOGGER.error("Error while retrieving the membership statements of the ContextDomainGroup " + getContextDomainGroupURI() + ": " + e.getMessage());
             return Optional.empty();
         }
+    }
+
+    /**
+     * Get the list of all context stream URIs in this domain
+     * @return List of context stream URIs
+     */
+    public List<String> getContextStreamURIs() {
+        List<String> streamURIs = new ArrayList<>();
+        for (ContextStream stream : contextStreams) {
+            streamURIs.add(stream.getStreamURI());
+        }
+        return streamURIs;
     }
 
     // =============================================================================================================

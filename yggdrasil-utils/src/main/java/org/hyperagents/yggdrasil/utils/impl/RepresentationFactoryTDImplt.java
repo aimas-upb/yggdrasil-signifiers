@@ -88,20 +88,6 @@ public class RepresentationFactoryTDImplt implements RepresentationFactory {
                     ).addSemanticType(HMAS + "PerceiveContextDomainGroup").build()
             );
         }
-        // Add membershipRuleQueryURLs
-        if (membershipRuleQueryURLs != null) {
-            for (String queryURL : membershipRuleQueryURLs) {
-                td.addAction(
-                        new ActionAffordance.Builder(
-                                "getMembershipRule",
-                                new Form.Builder(queryURL)
-                                        .setMethodName(GET)
-                                        .setContentType("application/json")
-                                        .build()
-                        ).addSemanticType(HMAS + "PerceiveMembershipRule").build()
-                );
-            }
-        }
         // Add context streams
         if (contextStreams != null) {
             for (String stream : contextStreams) {
@@ -116,33 +102,8 @@ public class RepresentationFactoryTDImplt implements RepresentationFactory {
                 );
             }
         }
-        // Add actions for subscribing and unsubscribing to context streams
-        if (notificationConfig.isEnabled()) {
-            td.addAction(
-                    new ActionAffordance.Builder(
-                            "subscribeToContextDomain",
-                            new Form.Builder(this.notificationConfig.getWebSubHubUri())
-                                    .setMethodName(HttpMethod.POST.name())
-                                    .setContentType("application/json")
-                                    .addSubProtocol(WEBSUB)
-                                    .build()
-                    ).addSemanticType(HMAS + "websub/subscribeToContextDomain").build()
-            );
-            td.addAction(
-                    new ActionAffordance.Builder(
-                            "unsubscribeFromContextDomain",
-                            new Form.Builder(this.notificationConfig.getWebSubHubUri())
-                                    .setMethodName(HttpMethod.POST.name())
-                                    .setContentType("application/json")
-                                    .addSubProtocol(WEBSUB)
-                                    .build()
-                    ).addSemanticType(HMAS + "websub/unsubscribeFromContextDomain").build()
-            );
-        }
-        // Wrap the Thing Description in a Resource Profile
+        
         wrapInResourceProfile(td, contextDomainURI, contextDomainURI + "#contextDomain");
-        // Serialize the Thing Description
-
       return serializeThingDescription(td);
   }
 
@@ -278,12 +239,6 @@ public class RepresentationFactoryTDImplt implements RepresentationFactory {
             RdfModelUtils.createIri(assertionType)
         );
     }
-
-    // streamMetadata.add(
-    //     streamIri,
-    //     RdfModelUtils.createIri(HMAS + "hasUpdateMode"),
-    //     RdfModelUtils.createIri(HMAS + "TimePeriodicUpdate")
-    // );
 
     td.addGraph(streamMetadata);
     return serializeThingDescription(td);

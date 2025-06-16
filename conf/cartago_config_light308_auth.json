@@ -5,7 +5,7 @@
     "base-uri" : "http://localhost:8080/"
   },
   "notification-config" : {
-    "enabled" : false
+    "enabled" : true
   },
   "agents" : [
     {
@@ -55,7 +55,8 @@
     "context-streams": [
       {
         "stream_uri": "http://localhost:8080/context/streams/LocatedAt",
-        "ontology_url": "file:///home/calin/yggdrasil-signifiers/yggdrasil-context/src/test/resources/context/upb-hmas-ont.ttl",
+        "ontology_url": "file:///home/calin/yggdrasil-signifiers/yggdrasil-context/src/test/resources/context/LocatedAt-ont.ttl",
+        // "ontology_url": "file:///home/calin/yggdrasil-signifiers/yggdrasil-context/src/test/resources/context/upb-hmas-ont.ttl",
 
         "assertions": [
           "http://example.org/LocatedAt"

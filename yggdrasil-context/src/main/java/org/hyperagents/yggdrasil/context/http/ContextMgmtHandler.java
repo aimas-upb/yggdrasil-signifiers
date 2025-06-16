@@ -786,7 +786,7 @@ public class ContextMgmtHandler {
             context.response()
                 .setStatusCode(400)
                 .putHeader("Content-Type", "application/json")
-                .end(new JsonObject().put("error", "Missing required 'streamURI' path parameter").encode());
+                .end(new JsonObject().put("error", "Missing required 'streamid' path parameter").encode());
             return;
         }
 

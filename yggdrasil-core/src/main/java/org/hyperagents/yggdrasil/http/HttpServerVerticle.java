@@ -243,7 +243,7 @@ public class HttpServerVerticle extends AbstractVerticle {
         .consumes("application/json")
         .handler(contextHandler::handleAddContextStream);
 
-    final Route removeContextStream = router.delete("/context/streams")
+    final Route removeContextStream = router.delete("/context/streams/:streamid")
         .handler(contextHandler::handleRemoveContextStream);
 
     final Route contextStreamSubscriptionVerification = router.get("/" + ContextManagementConfig.CONTEXT_STREAMS_PATH)

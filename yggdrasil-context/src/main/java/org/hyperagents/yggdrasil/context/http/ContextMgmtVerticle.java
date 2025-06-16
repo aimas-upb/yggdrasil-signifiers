@@ -465,15 +465,14 @@ public class ContextMgmtVerticle extends AbstractVerticle {
                                 
                                 boolean foundInStatic = false;
                                 boolean foundInProfiled = false;
-                                int staticCount = 0;
-                                int profiledCount = 0;
+                                boolean foundInDynamic = false;
                                 
                                 // Check in static context repository
                                 try (RepositoryConnection staticConn = staticContextRepo.getConnection()) {
                                     List<Statement> staticStatements = Iterations.asList(
                                         staticConn.getStatements(null, RDF.TYPE, typeIri, false)
                                     );
-                                    staticCount = staticStatements.size();
+                                    int staticCount = staticStatements.size();
                                     foundInStatic = staticCount > 0;
                                 }
                                 
@@ -482,19 +481,21 @@ public class ContextMgmtVerticle extends AbstractVerticle {
                                     List<Statement> profiledStatements = Iterations.asList(
                                         profiledConn.getStatements(null, RDF.TYPE, typeIri, false)
                                     );
-                                    profiledCount = profiledStatements.size();
+                                    int profiledCount = profiledStatements.size();
                                     foundInProfiled = profiledCount > 0;
+                                }
+
+                                // Check in dynamic context streams
+                                for (ContextStream stream : contextStreamMap.values()) {
+                                    if (stream.getContextAssertionTypes().contains(contextAssertionType)) {
+                                        foundInDynamic = true;
+                                        break;
+                                    }
                                 }
                                 
                                 JsonObject response = new JsonObject()
                                     .put("contextAssertionType", contextAssertionType)
-                                    .put("contains", foundInStatic || foundInProfiled)
-                                    .put("staticContext", new JsonObject()
-                                        .put("contains", foundInStatic)
-                                        .put("instanceCount", staticCount))
-                                    .put("profiledContext", new JsonObject()
-                                        .put("contains", foundInProfiled)
-                                        .put("instanceCount", profiledCount));
+                                    .put("contains", foundInStatic || foundInProfiled || foundInDynamic);
                                 
                                 message.reply(response.encode());
                                 

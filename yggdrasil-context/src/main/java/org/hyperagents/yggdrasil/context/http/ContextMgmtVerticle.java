@@ -747,6 +747,35 @@ public class ContextMgmtVerticle extends AbstractVerticle {
                                     "Error creating context domain: " + e.getMessage());
                             }
                         }
+                        case ContextMessage.RemoveContextDomain removeContextDomain -> {
+                            LOGGER.info("Handling RemoveContextDomain request for URI: " + removeContextDomain.contextDomainURI());
+                            try {
+                                String contextDomainURI = removeContextDomain.contextDomainURI();
+                                if (!contextDomains.containsKey(contextDomainURI)) {
+                                    LOGGER.warn("Context domain not found: " + contextDomainURI);
+                                    message.fail(HttpStatus.SC_NOT_FOUND, 
+                                        "Context domain not found: " + contextDomainURI);
+                                    return;
+                                }
+                                ContextDomain contextDomain = contextDomains.get(contextDomainURI);
+                                try {
+                                    contextDomain.stopAllQueries();
+                                    LOGGER.info("Successfully stopped all queries for domain: " + contextDomainURI);
+                                } catch (Exception e) {
+                                    LOGGER.warn("Error stopping queries for domain: " + contextDomainURI, e);
+                                }
+                                contextDomains.remove(contextDomainURI);
+                                JsonObject response = new JsonObject()
+                                    .put("contextDomainURI", contextDomainURI)
+                                    .put("status", "removed");
+                                message.reply(response.encode());
+                                LOGGER.info("Successfully removed context domain: {}", contextDomainURI);
+                            } catch (Exception e) {
+                                LOGGER.error("Error processing RemoveContextDomain request", e);
+                                message.fail(HttpStatus.SC_INTERNAL_SERVER_ERROR, 
+                                    "Error removing context domain: " + e.getMessage());
+                            }
+                        }
                         default -> {
                             LOGGER.warn("Received an unknown message type: " + message.body().getClass().getName());
                             message.fail(HttpStatus.SC_BAD_REQUEST, "Unknown message type.");

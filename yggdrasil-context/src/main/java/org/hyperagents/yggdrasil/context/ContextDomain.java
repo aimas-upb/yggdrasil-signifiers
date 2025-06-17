@@ -284,6 +284,33 @@ public class ContextDomain {
         }
     }
 
+    /**
+     * Stop all registered queries and clean up resources.
+     * This method should be called when removing a ContextDomain to properly clean up.
+     */
+    public void stopAllQueries() {
+        for (Map.Entry<String, JenaContinuousQueryExecution> entry : membershipRuleQueries.entrySet()) {
+            try {
+                JenaContinuousQueryExecution cqe = entry.getValue();
+                // Not sure this is the right way but i see no other way to stop it
+                cqe.deleteObservers();;
+                LOGGER.info("Stopped query execution for rule: " + entry.getKey());
+            } catch (Exception e) {
+                LOGGER.warn("Error stopping query execution for rule: " + entry.getKey(), e);
+            }
+        }
+        membershipRuleQueries.clear();
+        if (cdgMembershipRepo != null) {
+            try {
+                cdgMembershipRepo.shutDown();
+                LOGGER.info("Shutdown CDG membership repository for domain: " + contextDomainURI);
+            } catch (Exception e) {
+                LOGGER.warn("Error shutting down CDG membership repository for domain: " + contextDomainURI, e);
+            }
+        }
+        LOGGER.info("Stopped queries for ContextDomain: " + contextDomainURI);
+    }
+
     // =============================================================================================================
     // Auxiliary functions to get the URI of the ContextDomainGroup from the URI of the ContextDomain and vice versa
     // =============================================================================================================

@@ -906,4 +906,64 @@ public class ContextMgmtHandler {
                 }
             });
     }
+
+    /**
+     * Method to handle a request to remove a context domain.
+     * 
+     * @param context The Vert.x routing context of the request
+     */
+    public void handleRemoveContextDomain(RoutingContext context) {
+        LOGGER.info("Handling RemoveContextDomain action...");
+        
+        String domainURI = context.pathParam("domainid");
+        if (domainURI == null || domainURI.trim().isEmpty()) {
+            LOGGER.warn("Missing domainURI path parameter");
+            context.response()
+                .setStatusCode(400)
+                .putHeader("Content-Type", "application/json")
+                .end(new JsonObject().put("error", "Missing required 'domainid' path parameter").encode());
+            return;
+        }
+
+        // Reconstruct full domain URI from path parameter
+        String baseUrl = context.request().absoluteURI().substring(0, 
+            context.request().absoluteURI().lastIndexOf("/context/domains/"));
+        String fullDomainURI = baseUrl + "/context/domains/" + domainURI;
+
+        if (!managedContextDomainURIs.contains(fullDomainURI)) {
+            LOGGER.warn("Domain URI is not currently managed: " + fullDomainURI);
+            context.response()
+                .setStatusCode(404)
+                .putHeader("Content-Type", "application/json")
+                .end(new JsonObject().put("error", "Context domain not found or not currently managed").encode());
+            return;
+        }
+
+        this.contextMessageBox.sendMessage(new ContextMessage.RemoveContextDomain(fullDomainURI))
+            .onSuccess(r -> {
+                managedContextDomainURIs.remove(fullDomainURI);
+                context.response()
+                    .setStatusCode(200)
+                    .putHeader("Content-Type", "application/json")
+                    .end(new JsonObject()
+                        .put("message", "Context domain removed successfully")
+                        .put("contextDomainURI", fullDomainURI)
+                        .encode());
+            })
+            .onFailure(t -> {
+                LOGGER.error("Error removing context domain: " + fullDomainURI, t);
+                if (t instanceof ReplyException) {
+                    ReplyException re = (ReplyException) t;
+                    context.response()
+                        .setStatusCode(re.failureCode())
+                        .putHeader("Content-Type", "application/json")
+                        .end(new JsonObject().put("error", re.getMessage()).encode());
+                } else {
+                    context.response()
+                        .setStatusCode(500)
+                        .putHeader("Content-Type", "application/json")
+                        .end(new JsonObject().put("error", "Internal server error").encode());
+                }
+            });
+    }
 }

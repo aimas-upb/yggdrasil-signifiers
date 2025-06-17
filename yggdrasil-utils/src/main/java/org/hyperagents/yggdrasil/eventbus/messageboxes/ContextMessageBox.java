@@ -93,6 +93,12 @@ public class ContextMessageBox implements Messagebox<ContextMessage> {
                 ContextMessage.AddContextDomain.class,
                 new GenericMessageCodec<>(ContextMessage.AddContextDomain.class, new ContextManagementMessageMarshaller())
             );
+            
+            // Register the message handler for removing context domain
+            this.eventBus.registerDefaultCodec(
+                ContextMessage.RemoveContextDomain.class,
+                new GenericMessageCodec<>(ContextMessage.RemoveContextDomain.class, new ContextManagementMessageMarshaller())
+            );
         }
         else {
             LOGGER.warn("Context Management is not enabled. The context message exchange will not be initialized.");

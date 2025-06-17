@@ -135,14 +135,25 @@ public sealed interface ContextMessage {
     }
 
     /**
-     * A record representing a request to add a new ContextDomain to the Context Management Service.
+     * A record representing a request to add a new ContextDomain.
      * 
-     * <p> The contextDomainURI is the URI of the Context Domain to be added.
-     * <p> The contextDomainConfig contains configuration details for the Context Domain, such as its ontology URL and other settings.
+     * <p> The contextDomainURI is the URI of the ContextDomain to be added.
+     * <p> The contextDomainConfig contains configuration details for the ContextDomain.
      * 
-     * @param contextDomainURI The URI of the Context Domain to be added.
-     * @param contextDomainConfig The configuration details for the Context Domain.
+     * @param contextDomainURI The URI of the ContextDomain to add.
+     * @param contextDomainConfig The configuration details for the ContextDomain.
      */
     record AddContextDomain(String contextDomainURI, String contextDomainConfig) implements ContextMessage {
+    }
+
+    /**
+     * A record representing a request to remove a ContextDomain.
+     * 
+     * <p> The contextDomainURI is the URI of the ContextDomain to be removed.
+     * This operation will stop the domain's RSPQL engine and remove it from the managed domains.
+     * 
+     * @param contextDomainURI The URI of the ContextDomain to remove.
+     */
+    record RemoveContextDomain(String contextDomainURI) implements ContextMessage {
     }
 }

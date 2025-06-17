@@ -64,6 +64,9 @@ public class ContextManagementMessageMarshaller
                 jsonObject.get(MessageFields.CONTEXT_DOMAIN_URI.getName()).getAsString(),
                 jsonObject.get(MessageFields.CONTEXT_DOMAIN_CONFIG.getName()).getAsString()
             );
+            case REMOVE_CONTEXT_DOMAIN -> new ContextMessage.RemoveContextDomain(
+                jsonObject.get(MessageFields.CONTEXT_DOMAIN_URI.getName()).getAsString()
+            );
             default -> throw new JsonParseException("The request method is not valid");
         };
     }
@@ -127,6 +130,10 @@ public class ContextManagementMessageMarshaller
             case ContextMessage.RemoveContextStream removeContextStream -> {
                 jsonObject.addProperty(MessageFields.REQUEST_METHOD.getName(), MessageRequestMethods.REMOVE_CONTEXT_STREAM.getName());
                 jsonObject.addProperty(MessageFields.STREAM_URI.getName(), removeContextStream.streamURI());
+            }
+            case ContextMessage.RemoveContextDomain removeContextDomain -> {
+                jsonObject.addProperty(MessageFields.REQUEST_METHOD.getName(), MessageRequestMethods.REMOVE_CONTEXT_DOMAIN.getName());
+                jsonObject.addProperty(MessageFields.CONTEXT_DOMAIN_URI.getName(), removeContextDomain.contextDomainURI());
             }
         }
 

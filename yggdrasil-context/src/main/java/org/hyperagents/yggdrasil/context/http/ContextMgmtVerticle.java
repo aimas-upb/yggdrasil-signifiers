@@ -1,12 +1,16 @@
 package org.hyperagents.yggdrasil.context.http;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.StringReader;
 import java.io.UncheckedIOException;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -26,8 +30,12 @@ import org.apache.logging.log4j.Logger;
 import org.eclipse.rdf4j.common.exception.ValidationException;
 import org.eclipse.rdf4j.common.iteration.Iterations;
 import org.eclipse.rdf4j.model.IRI;
+import org.eclipse.rdf4j.model.Model;
+import org.eclipse.rdf4j.model.Resource;
 import org.eclipse.rdf4j.model.Statement;
+import org.eclipse.rdf4j.model.Value;
 import org.eclipse.rdf4j.model.impl.SimpleValueFactory;
+import org.eclipse.rdf4j.model.vocabulary.RDF;
 import org.eclipse.rdf4j.model.vocabulary.RDF4J;
 import org.eclipse.rdf4j.repository.RepositoryConnection;
 import org.eclipse.rdf4j.repository.RepositoryException;
@@ -35,6 +43,8 @@ import org.eclipse.rdf4j.repository.sail.SailRepository;
 import org.eclipse.rdf4j.repository.sail.SailRepositoryConnection;
 import org.eclipse.rdf4j.rio.RDFFormat;
 import org.eclipse.rdf4j.rio.RDFParseException;
+import org.eclipse.rdf4j.rio.RDFWriter;
+import org.eclipse.rdf4j.rio.Rio;
 import org.eclipse.rdf4j.sail.memory.MemoryStore;
 import org.eclipse.rdf4j.sail.shacl.ShaclSail;
 import org.hyperagents.yggdrasil.auth.model.CASHMERE;
@@ -274,6 +284,34 @@ public class ContextMgmtVerticle extends AbstractVerticle {
         }
     }
 
+    /**
+     * Unsubscribes from the WebSub hub for a specific stream.
+     *
+     * @param streamUri The URI of the stream to unsubscribe from
+     */
+    private void unsubscribeFromHub(HttpInterfaceConfig httpConfig, WebSubConfig webSubConfig, String streamUri) throws IOException {
+        String hubUri = webSubConfig.getWebSubHubUri();
+        String callbackUri = baseURITrailingSlash + ContextManagementConfig.STREAM_UPDATES_PATH;
+        
+        HttpClient httpClient = HttpClients.createDefault();
+        HttpPost httpPost = new HttpPost(hubUri);
+        
+        JsonObject json = new JsonObject();
+        json.put("hub.mode", "unsubscribe");
+        json.put("hub.topic", streamUri);
+        json.put("hub.callback", callbackUri);
+        StringEntity entity = new StringEntity(json.encode());
+        httpPost.setEntity(entity);
+        httpPost.setHeader("Content-Type", "application/json");
+        
+        HttpResponse response = httpClient.execute(httpPost);
+        int statusCode = response.getStatusLine().getStatusCode();
+        
+        if (statusCode < 200 || statusCode >= 300) {
+            throw new IOException("Failed to unsubscribe from WebSub hub. Status code: " + statusCode);
+        }
+    }
+
 
     private void setupContextAccessConditionsRepo(ContextManagementConfig ctxConfig, HttpInterfaceConfig httpConfig, Environment env)
             throws Exception {
@@ -326,23 +364,480 @@ public class ContextMgmtVerticle extends AbstractVerticle {
                 
                 try {
                     switch (message.body()) {
+                        // Case for ContextStreamRepresentation
+                        case ContextMessage.GetContextStreamRepresentation msgContent -> {
+                            LOGGER.info("Handling GetContextStreamRepresentation action...");
+                            message.reply(contextStreamMap.get(msgContent.streamURI()).getHypermediaRepresentation());
+                        }
+                        // Case for ContextDomainRepresentation
+                        case ContextMessage.ContextDomainRepresentation msgContent -> {
+                            LOGGER.info("Handling ContextDomainRepresentation action...");
+                            
+                            ContextDomain domain = contextDomains.get(msgContent.contextDomainURI());
+                            if (domain == null) {
+                                LOGGER.warn("Context domain not found: " + msgContent.contextDomainURI());
+                                message.fail(HttpStatus.SC_NOT_FOUND,
+                                        "Context domain not found: " + msgContent.contextDomainURI());
+                                return;
+                            }
+                            message.reply(domain.getContextDomainRepresentation());
+                        }
+
                         case ContextMessage.ValidateContextBasedAccess msgContent -> {
                             LOGGER.info("Handling Context-based access validation action...");
                             validateContextBasedAccess(msgContent.accessRequesterURI(), msgContent.accessedResourceURI(), message);
                         }
                         case ContextMessage.GetStaticContext msgContent -> {
                             LOGGER.info("Handling GetStaticContext action...");
-                            message.reply(staticContextRepo.getConnection().getStatements(null, null, null, false));
+                            try (RepositoryConnection conn = staticContextRepo.getConnection();
+                                ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+
+                                RDFWriter writer = Rio.createWriter(RDFFormat.TURTLE, out);
+                                conn.export(writer);
+
+                                message.reply(out.toString(StandardCharsets.UTF_8));
+                            } catch (Exception e) {
+                                LOGGER.error("Error serializing static context", e);
+                                message.fail(HttpStatus.SC_INTERNAL_SERVER_ERROR, 
+                                    "Error serializing static context: " + e.getMessage());
+                            }
                         }
                         case ContextMessage.GetProfiledContext msgContent -> {
-                            // TODO: Implement the GetProfiledContext action such that we retrieve all statements related to the ContextAssertion
-                            // referenced by the msgContent.contextAssertionType() from the profiledContextRepo
-                            LOGGER.info("Handling GetProfiledContext action...");
-                            message.reply(profiledContextRepo.getConnection().getStatements(null, null, null, false));
+                            LOGGER.info("Handling GetProfiledContext action for type: " + msgContent.contextAssertionType());
+                            try (RepositoryConnection conn = profiledContextRepo.getConnection();
+                                ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+                                    
+                                RDFWriter writer = Rio.createWriter(RDFFormat.TURTLE, out);
+                                
+                                // Get assertions of the specified type and their linked annotations
+                                String contextAssertionType = msgContent.contextAssertionType();
+                                IRI typeIri = SimpleValueFactory.getInstance().createIRI(contextAssertionType);
+                                
+                                // Find all instances of the specified assertion type
+                                List<Resource> assertionInstances = Iterations.asList(
+                                    conn.getStatements(null, RDF.TYPE, typeIri, false)
+                                ).stream()
+                                .map(Statement::getSubject)
+                                .toList();
+
+                                if (!assertionInstances.isEmpty()) {
+                                    writer.startRDF();
+                                    
+                                    // For each instance, get all its statements and annotation statements
+                                    for (Resource assertionInstance : assertionInstances) {
+                                        for (Statement stmt : Iterations.asList(conn.getStatements(assertionInstance, null, null, false))) {
+                                            writer.handleStatement(stmt);
+                                            
+                                            // If this statement links to an annotation, get the annotation's statements too
+                                            if (stmt.getPredicate().stringValue().contains("hasAnnotation")) {
+                                                Value annotationValue = stmt.getObject();
+                                                if (annotationValue instanceof Resource annotationResource) {
+                                                    Iterations.asList(conn.getStatements(annotationResource, null, null, false))
+                                                        .forEach(writer::handleStatement);
+                                                }
+                                            }
+                                        }
+                                    }
+                                    writer.endRDF();
+                                } else {
+                                    LOGGER.info("No instances found for assertion type: " + contextAssertionType);
+                                    writer.startRDF();
+                                    
+                                    IRI predicateIri = SimpleValueFactory.getInstance().createIRI("http://www.w3.org/2000/01/rdf-schema#subclassOf");
+                                    IRI objectIri = SimpleValueFactory.getInstance().createIRI("http://pervasive.semanticweb.org/ont/2017/07/consert/core#ContextAssertion");
+                                    Statement typeStmt = SimpleValueFactory.getInstance().createStatement(typeIri, predicateIri, objectIri);
+                                    writer.handleStatement(typeStmt);
+
+                                    writer.endRDF();
+                                }
+                                message.reply(out.toString(StandardCharsets.UTF_8));
+                                
+                            } catch (Exception e) {
+                                LOGGER.error("Error retrieving profiled context", e);
+                                message.fail(HttpStatus.SC_INTERNAL_SERVER_ERROR, 
+                                    "Error retrieving profiled context: " + e.getMessage());
+                            }
+                        }
+                        case ContextMessage.ContainsAssertion msgContent -> {
+                            LOGGER.info("Handling ContainsAssertion validation for type: " + msgContent.contextAssertionType());
+                            try {
+                                String contextAssertionType = msgContent.contextAssertionType();
+                                IRI typeIri = SimpleValueFactory.getInstance().createIRI(contextAssertionType);
+                                
+                                boolean foundInStatic = false;
+                                boolean foundInProfiled = false;
+                                boolean foundInDynamic = false;
+                                
+                                // Check in static context repository
+                                try (RepositoryConnection staticConn = staticContextRepo.getConnection()) {
+                                    List<Statement> staticStatements = Iterations.asList(
+                                        staticConn.getStatements(null, RDF.TYPE, typeIri, false)
+                                    );
+                                    int staticCount = staticStatements.size();
+                                    foundInStatic = staticCount > 0;
+                                }
+                                
+                                // Check in profiled context repository  
+                                try (RepositoryConnection profiledConn = profiledContextRepo.getConnection()) {
+                                    List<Statement> profiledStatements = Iterations.asList(
+                                        profiledConn.getStatements(null, RDF.TYPE, typeIri, false)
+                                    );
+                                    int profiledCount = profiledStatements.size();
+                                    foundInProfiled = profiledCount > 0;
+                                }
+
+                                // Check in dynamic context streams
+                                for (ContextStream stream : contextStreamMap.values()) {
+                                    if (stream.getContextAssertionTypes().contains(contextAssertionType)) {
+                                        foundInDynamic = true;
+                                        break;
+                                    }
+                                }
+                                
+                                JsonObject response = new JsonObject()
+                                    .put("contextAssertionType", contextAssertionType)
+                                    .put("contains", foundInStatic || foundInProfiled || foundInDynamic);
+                                
+                                message.reply(response.encode());
+                                
+                            } catch (Exception e) {
+                                LOGGER.error("Error validating ContainsAssertion", e);
+                                message.fail(HttpStatus.SC_INTERNAL_SERVER_ERROR, 
+                                    "Error validating ContainsAssertion: " + e.getMessage());
+                            }
                         }
                         case ContextMessage.ContextStreamUpdate streamUpdate -> {
                             LOGGER.info("Received request to update context stream: " + streamUpdate.streamURI());  
                             updateContextStream(streamUpdate.streamURI(), streamUpdate.updateContent(), streamUpdate.updateTimestamp(), message);
+                        }
+                        case ContextMessage.AddStaticContext addStaticContext -> {
+                            LOGGER.info("Handling AddStaticContext request");
+                            try {
+                                Model model = Rio.parse(new StringReader(addStaticContext.rdfContent()), "", RDFFormat.TURTLE);
+                                
+                                try (RepositoryConnection conn = staticContextRepo.getConnection()) {
+                                    conn.begin();
+                                    conn.add(model);
+                                    conn.commit();
+                                    
+                                    int statementCount = model.size();
+                                    LOGGER.info("Successfully added {} statements to static context repository", statementCount);
+                                    message.reply(String.valueOf(statementCount));
+                                }
+                                
+                            } catch (RDFParseException e) {
+                                LOGGER.error("Error parsing RDF content", e);
+                                message.fail(HttpStatus.SC_BAD_REQUEST, 
+                                    "Invalid RDF content: " + e.getMessage());
+                            } catch (RepositoryException e) {
+                                LOGGER.error("Error adding RDF content to static context repository", e);
+                                message.fail(HttpStatus.SC_INTERNAL_SERVER_ERROR, 
+                                    "Error adding content to repository: " + e.getMessage());
+                            } catch (Exception e) {
+                                LOGGER.error("Unexpected error adding static context", e);
+                                message.fail(HttpStatus.SC_INTERNAL_SERVER_ERROR, 
+                                    "Unexpected error: " + e.getMessage());
+                            }
+                        }
+                        case ContextMessage.AddProfiledContext addProfiledContext -> {
+                            LOGGER.info("Handling AddProfiledContext request");
+                            try {
+                                Model model = Rio.parse(new StringReader(addProfiledContext.rdfContent()), "", RDFFormat.TURTLE);
+                                
+                                try (RepositoryConnection conn = profiledContextRepo.getConnection()) {
+                                    conn.begin();
+                                    conn.add(model);
+                                    conn.commit();
+                                    
+                                    int statementCount = model.size();
+                                    LOGGER.info("Successfully added {} statements to profiled context repository", statementCount);
+                                    message.reply(String.valueOf(statementCount));
+                                }
+                                
+                            } catch (RDFParseException e) {
+                                LOGGER.error("Error parsing RDF content", e);
+                                message.fail(HttpStatus.SC_BAD_REQUEST, 
+                                    "Invalid RDF content: " + e.getMessage());
+                            } catch (RepositoryException e) {
+                                LOGGER.error("Error adding RDF content to profiled context repository", e);
+                                message.fail(HttpStatus.SC_INTERNAL_SERVER_ERROR, 
+                                    "Error adding content to repository: " + e.getMessage());
+                            } catch (Exception e) {
+                                LOGGER.error("Unexpected error adding profiled context", e);
+                                message.fail(HttpStatus.SC_INTERNAL_SERVER_ERROR, 
+                                    "Unexpected error: " + e.getMessage());
+                            }
+                        }
+                        case ContextMessage.AddContextStream addContextStream -> {
+                            LOGGER.info("Handling AddContextStream request for URI: " + addContextStream.streamURI());
+                            try {
+                                JsonObject streamConfigJson = new JsonObject(addContextStream.streamConfig());
+                                String streamURI = addContextStream.streamURI();
+
+                                // if (!managedContextStreamURIs.contains(streamURI)) {
+                                //     managedContextStreamURIs.add(streamURI);
+                                //     LOGGER.info("Added stream URI {} to managed context streams", streamURI);
+                                // } else {
+                                //     LOGGER.info("Stream URI {} is already being managed", streamURI);
+                                // }                      
+
+                                ContextStream stream = new ContextStream(streamURI, 
+                                    streamConfigJson.getString("ontologyUrl"), 
+                                    streamConfigJson.getJsonArray("assertions").getList());
+                                contextStreamMap.put(streamURI, stream);
+
+                                // managedContextStreamURIs.add(streamURI);
+                                LOGGER.info("Context stream {} added to managed streams", streamURI);
+                                LOGGER.info("Context stream {} indexed successfully", streamURI);
+
+                                final var httpConfig = this.vertx.sharedData()
+                                    .<String, HttpInterfaceConfig>getLocalMap("http-config")
+                                    .get("default");
+                                final var webSubConfig = this.vertx.sharedData()
+                                    .<String, WebSubConfig>getLocalMap("notification-config")
+                                    .get("default");
+
+                                try {
+                                    subscribeToHub(httpConfig, webSubConfig, streamURI);
+                                    LOGGER.info("Subscribed to stream: " + streamURI + " (name: " + stream.getStreamName() + ")");
+                                } catch (IOException e) {
+                                    LOGGER.error("Failed to subscribe to stream: " + streamURI, e);
+                                }
+
+                                // Create a response JSON object with the stream URI and status
+                                JsonObject response = new JsonObject()
+                                    .put("streamURI", streamURI)
+                                    .put("status", "indexed")
+                                    .put("managed", true);
+                                
+                                message.reply(response.encode());
+                                LOGGER.info("Successfully indexed context stream: {}", streamURI);
+                                
+                            } catch (Exception e) {
+                                LOGGER.error("Error processing AddContextStream request", e);
+                                message.fail(HttpStatus.SC_INTERNAL_SERVER_ERROR, 
+                                    "Error processing context stream: " + e.getMessage());
+                            }
+                        }
+                        case ContextMessage.RemoveContextStream removeContextStream -> {
+                            LOGGER.info("Handling RemoveContextStream request for URI: " + removeContextStream.streamURI());
+                            try {
+                                String streamURI = removeContextStream.streamURI();
+                                if (!contextStreamMap.containsKey(streamURI)) {
+                                    LOGGER.warn("Stream URI not found in managed context streams: " + streamURI);
+                                    message.fail(HttpStatus.SC_NOT_FOUND, 
+                                        "Context stream not found: " + streamURI);
+                                    return;
+                                }
+
+                                final var httpConfig = this.vertx.sharedData()
+                                    .<String, HttpInterfaceConfig>getLocalMap("http-config")
+                                    .get("default");
+                                final var webSubConfig = this.vertx.sharedData()
+                                    .<String, WebSubConfig>getLocalMap("notification-config")
+                                    .get("default");
+
+                                try {
+                                    unsubscribeFromHub(httpConfig, webSubConfig, streamURI);
+                                    LOGGER.info("Unsubscribed from stream: " + streamURI);
+                                } catch (IOException e) {
+                                    LOGGER.error("Failed to unsubscribe from stream: " + streamURI, e);
+                                }
+
+                                // Remove from contextStreamMap
+                                contextStreamMap.remove(streamURI);
+                                LOGGER.info("Context stream {} removed from managed streams", streamURI);
+                                LOGGER.info("Context stream {} unindexed successfully", streamURI);
+
+                                JsonObject response = new JsonObject()
+                                    .put("streamURI", streamURI)
+                                    .put("status", "removed")
+                                    .put("managed", false);
+                                
+                                message.reply(response.encode());
+                                LOGGER.info("Successfully removed context stream: {}", streamURI);
+                                
+                            } catch (Exception e) {
+                                LOGGER.error("Error processing RemoveContextStream request", e);
+                                message.fail(HttpStatus.SC_INTERNAL_SERVER_ERROR, 
+                                    "Error processing context stream removal: " + e.getMessage());
+                            }
+                        }
+                        case ContextMessage.AddContextDomain addContextDomain -> {
+                            LOGGER.info("Handling AddContextDomain request for URI: " + addContextDomain.contextDomainURI());
+                            try {
+                                String contextDomainURI = addContextDomain.contextDomainURI();
+                                String contextDomainConfigStr = addContextDomain.contextDomainConfig();
+                                
+                                // Parse the nested configuration JSON
+                                JsonObject contextDomainConfig = new JsonObject(contextDomainConfigStr);
+                                String engineConfigURL = contextDomainConfig.getString("engineConfigURL");
+                                List<String> membershipRules = contextDomainConfig.getJsonArray("membershipRules") != null ?
+                                    contextDomainConfig.getJsonArray("membershipRules").stream()
+                                        .map(Object::toString)
+                                        .toList() : List.of();
+                                List<String> requiredStreamURIs = contextDomainConfig.getJsonArray("requiredStreamURIs") != null ?
+                                    contextDomainConfig.getJsonArray("requiredStreamURIs").stream()
+                                        .map(Object::toString)
+                                        .toList() : List.of();
+
+                                // Validate required fields
+                                if (engineConfigURL == null || engineConfigURL.isEmpty()) {
+                                    LOGGER.warn("Missing or empty engineConfigURL in context domain config");
+                                    message.fail(HttpStatus.SC_BAD_REQUEST, 
+                                        "Missing required 'engineConfigURL' in context domain config");
+                                    return;
+                                }
+
+                                if (membershipRules.isEmpty()) {
+                                    LOGGER.warn("Missing or empty membershipRules in context domain config");
+                                    message.fail(HttpStatus.SC_BAD_REQUEST, 
+                                        "At least one membership rule is required in context domain config");
+                                    return;
+                                }
+
+                                // Check if the domain already exists
+                                if (contextDomains.containsKey(contextDomainURI)) {
+                                    LOGGER.warn("Context domain already exists: " + contextDomainURI);
+                                    message.fail(HttpStatus.SC_CONFLICT, 
+                                        "Context domain already exists: " + contextDomainURI);
+                                    return;
+                                }
+
+                                // Validate that all required streams are available
+                                if (!contextStreamMap.keySet().containsAll(requiredStreamURIs)) {
+                                    Set<String> missingStreams = new HashSet<>(requiredStreamURIs);
+                                    missingStreams.removeAll(contextStreamMap.keySet());
+                                    LOGGER.warn("Required context streams not found. Missing streams: " + missingStreams);
+                                    message.fail(HttpStatus.SC_BAD_REQUEST, 
+                                        "Required context streams not found. Missing streams: " + missingStreams);
+                                    return;
+                                }
+
+                                // Get the required ContextStream objects
+                                List<ContextStream> requiredContextStreams = requiredStreamURIs.stream()
+                                    .map(streamURI -> contextStreamMap.get(streamURI))
+                                    .toList();
+
+                                // Create the new ContextDomain
+                                ContextDomain contextDomain = new ContextDomain(contextDomainURI, 
+                                                                                engineConfigURL, 
+                                                                                membershipRules,
+                                                                                requiredContextStreams);
+                                
+                                // Add to the context domains map
+                                contextDomains.put(contextDomainURI, contextDomain);
+                                
+                                LOGGER.info("Context domain {} added successfully", contextDomainURI);
+                                
+                                // Create a response JSON object with the domain information
+                                JsonObject response = new JsonObject()
+                                    .put("contextDomainURI", contextDomainURI)
+                                    .put("status", "created")
+                                    .put("groupURI", contextDomain.getContextDomainGroupURI())
+                                    .put("membershipRulesCount", membershipRules.size())
+                                    .put("requiredStreamsCount", requiredStreamURIs.size());
+                                
+                                message.reply(response.encode());
+                                LOGGER.info("Successfully created context domain: {}", contextDomainURI);
+                                
+                            } catch (Exception e) {
+                                LOGGER.error("Error processing AddContextDomain request", e);
+                                message.fail(HttpStatus.SC_INTERNAL_SERVER_ERROR, 
+                                    "Error creating context domain: " + e.getMessage());
+                            }
+                        }
+                        case ContextMessage.RemoveContextDomain removeContextDomain -> {
+                            LOGGER.info("Handling RemoveContextDomain request for URI: " + removeContextDomain.contextDomainURI());
+                            try {
+                                String contextDomainURI = removeContextDomain.contextDomainURI();
+                                if (!contextDomains.containsKey(contextDomainURI)) {
+                                    LOGGER.warn("Context domain not found: " + contextDomainURI);
+                                    message.fail(HttpStatus.SC_NOT_FOUND, 
+                                        "Context domain not found: " + contextDomainURI);
+                                    return;
+                                }
+                                ContextDomain contextDomain = contextDomains.get(contextDomainURI);
+                                try {
+                                    contextDomain.stopAllQueries();
+                                    LOGGER.info("Successfully stopped all queries for domain: " + contextDomainURI);
+                                } catch (Exception e) {
+                                    LOGGER.warn("Error stopping queries for domain: " + contextDomainURI, e);
+                                }
+                                contextDomains.remove(contextDomainURI);
+                                JsonObject response = new JsonObject()
+                                    .put("contextDomainURI", contextDomainURI)
+                                    .put("status", "removed");
+                                message.reply(response.encode());
+                                LOGGER.info("Successfully removed context domain: {}", contextDomainURI);
+                            } catch (Exception e) {
+                                LOGGER.error("Error processing RemoveContextDomain request", e);
+                                message.fail(HttpStatus.SC_INTERNAL_SERVER_ERROR, 
+                                    "Error removing context domain: " + e.getMessage());
+                            }
+                        }
+                        case ContextMessage.AddMembershipRule addMembershipRule -> {
+                            LOGGER.info("Handling AddMembershipRule request for domain: " + addMembershipRule.contextDomainURI());
+                            try {
+                                String contextDomainURI = addMembershipRule.contextDomainURI();
+                                String membershipRule = addMembershipRule.membershipRule();
+                                
+                                if (!contextDomains.containsKey(contextDomainURI)) {
+                                    LOGGER.warn("Context domain not found: " + contextDomainURI);
+                                    message.fail(HttpStatus.SC_NOT_FOUND, 
+                                        "Context domain not found: " + contextDomainURI);
+                                    return;
+                                }
+
+                                ContextDomain contextDomain = contextDomains.get(contextDomainURI);
+                                try {
+                                    contextDomain.addMembershipRule(membershipRule);
+                                    LOGGER.info("Added membership rule: " + membershipRule + " to domain: " + contextDomainURI);
+                                    message.reply("OK");
+                                } catch (Exception e) {
+                                    LOGGER.error("Failed to add membership rule: " + membershipRule, e);
+                                    message.fail(HttpStatus.SC_INTERNAL_SERVER_ERROR, 
+                                        "Failed to add membership rule: " + e.getMessage());
+                                }
+                                
+                            } catch (Exception e) {
+                                LOGGER.error("Error processing AddMembershipRule request", e);
+                                message.fail(HttpStatus.SC_INTERNAL_SERVER_ERROR, 
+                                    "Error adding membership rule: " + e.getMessage());
+                            }
+                        }
+                        case ContextMessage.RemoveMembershipRule removeMembershipRule -> {
+                            LOGGER.info("Handling RemoveMembershipRule request for domain: " + removeMembershipRule.contextDomainURI());
+                            try {
+                                String contextDomainURI = removeMembershipRule.contextDomainURI();
+                                String membershipRule = removeMembershipRule.membershipRule();
+                                
+                                // Check if the domain exists
+                                if (!contextDomains.containsKey(contextDomainURI)) {
+                                    LOGGER.warn("Context domain not found: " + contextDomainURI);
+                                    message.fail(HttpStatus.SC_NOT_FOUND, 
+                                        "Context domain not found: " + contextDomainURI);
+                                    return;
+                                }
+                                
+                                ContextDomain contextDomain = contextDomains.get(contextDomainURI);
+                                
+                                // Remove the membership rule
+                                try {
+                                    contextDomain.removeMembershipRule(membershipRule);
+                                    LOGGER.info("Removed membership rule: " + membershipRule + " from domain: " + contextDomainURI);
+                                    message.reply("OK");
+                                } catch (Exception e) {
+                                    LOGGER.error("Failed to remove membership rule: " + membershipRule, e);
+                                    message.fail(HttpStatus.SC_INTERNAL_SERVER_ERROR, 
+                                        "Failed to remove membership rule: " + e.getMessage());
+                                }
+                                
+                            } catch (Exception e) {
+                                LOGGER.error("Error processing RemoveMembershipRule request", e);
+                                message.fail(HttpStatus.SC_INTERNAL_SERVER_ERROR, 
+                                    "Error removing membership rule: " + e.getMessage());
+                            }
                         }
                         default -> {
                             LOGGER.warn("Received an unknown message type: " + message.body().getClass().getName());
@@ -381,6 +876,8 @@ public class ContextMgmtVerticle extends AbstractVerticle {
         
         // Reply to the message with a success message
         message.reply("Stream " + streamURI + " updated successfully.");
+        LOGGER.info("Context stream {} updated successfully with {} statements at timestamp {}", 
+            streamURI, graph.size(), updateTimestamp);
     }
 
     // ============================================================================
@@ -487,8 +984,8 @@ public class ContextMgmtVerticle extends AbstractVerticle {
                 conn.commit();
 
                 // for debug: serialize the contents of the validationRepo into a temporary turtle file
-                File tempDataRepoFile = new File("/home/alex/OneDrive/AI-MAS/projects/2022-CASHMERE/dev/yggdrasil/src/test/resources/dataRepo.ttl");
-                Utils.serializeRepoConnection(conn, tempDataRepoFile);
+                // File tempDataRepoFile = new File("/home/alex/OneDrive/AI-MAS/projects/2022-CASHMERE/dev/yggdrasil/src/test/resources/dataRepo.ttl");
+                // Utils.serializeRepoConnection(conn, tempDataRepoFile);
 
                 LOGGER.info("Access to artifact " + accessedResourceURI + " allowed for access requester: " 
                         + accessRequesterURI + ". Reason: Context validation successful.");

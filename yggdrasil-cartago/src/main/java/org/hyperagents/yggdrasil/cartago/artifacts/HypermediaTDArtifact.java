@@ -68,13 +68,13 @@ public abstract class HypermediaTDArtifact extends Artifact implements Hypermedi
    */
   public final String getHypermediaDescription(final String semanticType) {
     return this.representationFactory.createArtifactRepresentation(
-        this.getId().getWorkspaceId().getName(),
-        this.getId().getName(),
-        this.securityScheme,
-        semanticType,
-        this.metadata,
-        this.actionAffordances,
-        true
+        this.getId().getWorkspaceId().getName(), // light308
+        this.getId().getName(), // HueLampTD
+        this.securityScheme, // no security
+        semanticType, // http://www.w3.org/2019/wot/td#Thing
+        this.metadata, // metadata
+        this.actionAffordances, // action affordances
+        true // include the artifact URI in the description
     );
   }
 

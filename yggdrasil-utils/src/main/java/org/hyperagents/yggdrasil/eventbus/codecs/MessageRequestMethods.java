@@ -4,6 +4,8 @@ import java.util.Arrays;
 import java.util.Optional;
 
 enum MessageRequestMethods {
+  ADD_CONTEXT_DOMAIN("addContextDomain"),
+  DELETE_CONTEXT_DOMAIN("deleteContextDomain"),
   GET_ENTITY("getEntity"),
   GET_ENTITY_IRI("getEntityIri"),
   UPDATE_ENTITY("updateEntity"),
@@ -19,13 +21,24 @@ enum MessageRequestMethods {
   DO_ACTION("performAction"),
   GET_WORKSPACES("GetWorkspaces"),
   GET_ARTIFACTS("GetArtifacts"),
+  CONTEXT_DOMAIN_REPRESENTATION("ContextDomainRepresentation"),
   QUERY("query"),
   // Context Management
+  CONTAINS_ASSERTION("containsAssertion"),
   VALIDATE_CONTEXT_BASED_ACCESS("validateContextBasedAccess"),
   GET_STATIC_CONTEXT("getStaticContext"),
   GET_PROFILED_CONTEXT("getProfiledContext"),
+  ADD_STATIC_CONTEXT("addStaticContext"),
+  ADD_PROFILED_CONTEXT("addProfiledContext"),
+  ADD_CONTEXT_STREAM("addContextStream"),
+  REMOVE_CONTEXT_STREAM("removeContextStream"),
+  REMOVE_CONTEXT_DOMAIN("removeContextDomain"),
+  ADD_MEMBERSHIP_RULE("addMembershipRule"),
+  REMOVE_MEMBERSHIP_RULE("removeMembershipRule"),
+  GET_MEMBERSHIP_RULES("getMembershipRules"),
   CONTEXT_STREAM_VERIFY_SUBSCRIPTION("contextStreamVerifySubscription"),
   CONTEXT_STREAM_UPDATE("contextStreamUpdate"),
+  GET_CONTEXT_STREAM_REPRESENTATION("getContextStreamRepresentation"),
   // WAC
   AUTHORIZE_ACCESS("authorizeAccess"),
   GET_WAC_RESOURCE("getWACResource"),

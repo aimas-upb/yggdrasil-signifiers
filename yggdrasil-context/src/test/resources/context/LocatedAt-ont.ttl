@@ -1,0 +1,48 @@
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix consert-core: <http://pervasive.semanticweb.org/ont/2017/07/consert/core#> .
+@prefix ex: <http://example.org/> .
+
+<http://example.org/LocatedAt-ont> rdf:type owl:Ontology ;
+    rdfs:label "LocatedAt Context Assertion Ontology" ;
+    rdfs:comment "Ontology defining the LocatedAt context assertion for location-based context reasoning" .
+
+ex:TestAssertion rdf:type owl:Class ;
+    rdfs:label "Test Assertion used for testing purposes" ;
+    rdfs:subClassOf consert-core:BinaryContextAssertion ,
+        [ rdf:type owl:Restriction ;
+          owl:onProperty consert-core:assertionAcquisitionType ;
+          owl:allValuesFrom consert-core:Sensed
+        ] ,
+        [ rdf:type owl:Restriction ;
+          owl:onProperty consert-core:assertionObject ;
+          owl:allValuesFrom ex:Room1
+        ] ,
+        [ rdf:type owl:Restriction ;
+          owl:onProperty consert-core:assertionSubject ;
+          owl:allValuesFrom ex:Person1
+        ] .
+
+ex:LocatedAt rdf:type owl:Class ;
+    rdfs:label "Located At" ;
+    rdfs:subClassOf consert-core:BinaryContextAssertion ,
+        [ rdf:type owl:Restriction ;
+          owl:onProperty consert-core:assertionAcquisitionType ;
+          owl:allValuesFrom consert-core:Sensed
+        ] ,
+        [ rdf:type owl:Restriction ;
+          owl:onProperty consert-core:assertionObject ;
+          owl:allValuesFrom ex:Room
+        ] ,
+        [ rdf:type owl:Restriction ;
+          owl:onProperty consert-core:assertionSubject ;
+          owl:allValuesFrom ex:Person
+        ] .
+
+ex:Person rdf:type owl:Class ;
+    rdfs:label "Person" .
+
+ex:Room rdf:type owl:Class ;
+    rdfs:label "Room" .

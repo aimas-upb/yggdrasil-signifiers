@@ -44,6 +44,37 @@ public class ContextManagementMessageMarshaller
             case CONTEXT_STREAM_VERIFY_SUBSCRIPTION -> new ContextMessage.VerifyContextStreamSubscription(
                 jsonObject.get(MessageFields.STREAM_URI.getName()).getAsString()
             );
+            case CONTAINS_ASSERTION -> new ContextMessage.ContainsAssertion(
+                jsonObject.get(MessageFields.CONTEXT_ASSERTION_TYPE.getName()).getAsString()
+            );
+            case ADD_STATIC_CONTEXT -> new ContextMessage.AddStaticContext(
+                jsonObject.get(MessageFields.RDF_CONTENT.getName()).getAsString()
+            );
+            case ADD_PROFILED_CONTEXT -> new ContextMessage.AddProfiledContext(
+                jsonObject.get(MessageFields.RDF_CONTENT.getName()).getAsString()
+            );
+            case ADD_CONTEXT_STREAM -> new ContextMessage.AddContextStream(
+                jsonObject.get(MessageFields.STREAM_URI.getName()).getAsString(),
+                jsonObject.get(MessageFields.STREAM_CONFIG.getName()).getAsString()
+            );
+            case REMOVE_CONTEXT_STREAM -> new ContextMessage.RemoveContextStream(
+                jsonObject.get(MessageFields.STREAM_URI.getName()).getAsString()
+            );
+            case ADD_CONTEXT_DOMAIN -> new ContextMessage.AddContextDomain(
+                jsonObject.get(MessageFields.CONTEXT_DOMAIN_URI.getName()).getAsString(),
+                jsonObject.get(MessageFields.CONTEXT_DOMAIN_CONFIG.getName()).getAsString()
+            );
+            case REMOVE_CONTEXT_DOMAIN -> new ContextMessage.RemoveContextDomain(
+                jsonObject.get(MessageFields.CONTEXT_DOMAIN_URI.getName()).getAsString()
+            );
+            case ADD_MEMBERSHIP_RULE -> new ContextMessage.AddMembershipRule(
+                jsonObject.get(MessageFields.CONTEXT_DOMAIN_URI.getName()).getAsString(),
+                jsonObject.get(MessageFields.MEMBERSHIP_RULE.getName()).getAsString()
+            );
+            case REMOVE_MEMBERSHIP_RULE -> new ContextMessage.RemoveMembershipRule(
+                jsonObject.get(MessageFields.CONTEXT_DOMAIN_URI.getName()).getAsString(),
+                jsonObject.get(MessageFields.MEMBERSHIP_RULE.getName()).getAsString()
+            );
             default -> throw new JsonParseException("The request method is not valid");
         };
     }
@@ -52,6 +83,19 @@ public class ContextManagementMessageMarshaller
     public JsonElement serialize(ContextMessage contextMsg, Type type, JsonSerializationContext jsonContext) {
         final var jsonObject = new JsonObject();
         switch(contextMsg) {
+            case ContextMessage.AddContextDomain addContextDomain -> {
+                jsonObject.addProperty(MessageFields.REQUEST_METHOD.getName(), MessageRequestMethods.ADD_CONTEXT_DOMAIN.getName());
+                jsonObject.addProperty(MessageFields.CONTEXT_DOMAIN_URI.getName(), addContextDomain.contextDomainURI());
+                jsonObject.addProperty(MessageFields.CONTEXT_DOMAIN_CONFIG.getName(), addContextDomain.contextDomainConfig());
+            }
+
+            case ContextMessage.ContainsAssertion containsAssertion -> {
+                jsonObject.addProperty(MessageFields.REQUEST_METHOD.getName(), MessageRequestMethods.CONTAINS_ASSERTION.getName());
+                jsonObject.addProperty(MessageFields.CONTEXT_ASSERTION_TYPE.getName(), containsAssertion.contextAssertionType());
+            }
+            case ContextMessage.ContextDomainRepresentation contextDomainRepresentation -> {
+                jsonObject.addProperty(MessageFields.REQUEST_METHOD.getName(), MessageRequestMethods.CONTEXT_DOMAIN_REPRESENTATION.getName());
+            }
             case ContextMessage.ValidateContextBasedAccess validateContextBasecAccess -> {
                 jsonObject.addProperty(MessageFields.REQUEST_METHOD.getName(), MessageRequestMethods.VALIDATE_CONTEXT_BASED_ACCESS.getName());
                 jsonObject.addProperty(MessageFields.ACCESS_REQUESTER_URI.getName(), validateContextBasecAccess.accessRequesterURI());
@@ -59,6 +103,10 @@ public class ContextManagementMessageMarshaller
             }
             case ContextMessage.GetStaticContext getStaticContext -> {
                 jsonObject.addProperty(MessageFields.REQUEST_METHOD.getName(), MessageRequestMethods.GET_STATIC_CONTEXT.getName());
+            }
+            case ContextMessage.GetContextStreamRepresentation getContextStreamRepresentation -> {
+                jsonObject.addProperty(MessageFields.REQUEST_METHOD.getName(), MessageRequestMethods.GET_CONTEXT_STREAM_REPRESENTATION.getName());
+                jsonObject.addProperty(MessageFields.STREAM_URI.getName(), getContextStreamRepresentation.streamURI());
             }
             case ContextMessage.GetProfiledContext getProfiledContext -> {
                 jsonObject.addProperty(MessageFields.REQUEST_METHOD.getName(), MessageRequestMethods.GET_PROFILED_CONTEXT.getName());
@@ -73,6 +121,37 @@ public class ContextManagementMessageMarshaller
             case ContextMessage.VerifyContextStreamSubscription verifyContextStreamSubscription -> {
                 jsonObject.addProperty(MessageFields.REQUEST_METHOD.getName(), MessageRequestMethods.CONTEXT_STREAM_VERIFY_SUBSCRIPTION.getName());
                 jsonObject.addProperty(MessageFields.STREAM_URI.getName(), verifyContextStreamSubscription.streamURI());
+            }
+            case ContextMessage.AddStaticContext addStaticContext -> {
+                jsonObject.addProperty(MessageFields.REQUEST_METHOD.getName(), MessageRequestMethods.ADD_STATIC_CONTEXT.getName());
+                jsonObject.addProperty(MessageFields.RDF_CONTENT.getName(), addStaticContext.rdfContent());
+            }
+            case ContextMessage.AddProfiledContext addProfiledContext -> {
+                jsonObject.addProperty(MessageFields.REQUEST_METHOD.getName(), MessageRequestMethods.ADD_PROFILED_CONTEXT.getName());
+                jsonObject.addProperty(MessageFields.RDF_CONTENT.getName(), addProfiledContext.rdfContent());
+            }
+            case ContextMessage.AddContextStream addContextStream -> {
+                jsonObject.addProperty(MessageFields.REQUEST_METHOD.getName(), MessageRequestMethods.ADD_CONTEXT_STREAM.getName());
+                jsonObject.addProperty(MessageFields.STREAM_URI.getName(), addContextStream.streamURI());
+                jsonObject.addProperty(MessageFields.STREAM_CONFIG.getName(), addContextStream.streamConfig());
+            }
+            case ContextMessage.RemoveContextStream removeContextStream -> {
+                jsonObject.addProperty(MessageFields.REQUEST_METHOD.getName(), MessageRequestMethods.REMOVE_CONTEXT_STREAM.getName());
+                jsonObject.addProperty(MessageFields.STREAM_URI.getName(), removeContextStream.streamURI());
+            }
+            case ContextMessage.RemoveContextDomain removeContextDomain -> {
+                jsonObject.addProperty(MessageFields.REQUEST_METHOD.getName(), MessageRequestMethods.REMOVE_CONTEXT_DOMAIN.getName());
+                jsonObject.addProperty(MessageFields.CONTEXT_DOMAIN_URI.getName(), removeContextDomain.contextDomainURI());
+            }
+            case ContextMessage.AddMembershipRule addMembershipRule -> {
+                jsonObject.addProperty(MessageFields.REQUEST_METHOD.getName(), MessageRequestMethods.ADD_MEMBERSHIP_RULE.getName());
+                jsonObject.addProperty(MessageFields.CONTEXT_DOMAIN_URI.getName(), addMembershipRule.contextDomainURI());
+                jsonObject.addProperty(MessageFields.MEMBERSHIP_RULE.getName(), addMembershipRule.membershipRule());
+            }
+            case ContextMessage.RemoveMembershipRule removeMembershipRule -> {
+                jsonObject.addProperty(MessageFields.REQUEST_METHOD.getName(), MessageRequestMethods.REMOVE_MEMBERSHIP_RULE.getName());
+                jsonObject.addProperty(MessageFields.CONTEXT_DOMAIN_URI.getName(), removeMembershipRule.contextDomainURI());
+                jsonObject.addProperty(MessageFields.MEMBERSHIP_RULE.getName(), removeMembershipRule.membershipRule());
             }
         }
 

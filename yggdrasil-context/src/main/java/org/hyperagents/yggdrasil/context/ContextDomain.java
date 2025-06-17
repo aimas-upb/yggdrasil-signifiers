@@ -22,6 +22,9 @@ import org.eclipse.rdf4j.repository.sail.SailRepository;
 import org.eclipse.rdf4j.sail.memory.MemoryStore;
 import org.hyperagents.yggdrasil.auth.model.CASHMERE;
 import org.hyperagents.yggdrasil.context.http.Utils;
+import org.hyperagents.yggdrasil.utils.HttpInterfaceConfig;
+import org.hyperagents.yggdrasil.utils.WebSubConfig;
+import org.hyperagents.yggdrasil.utils.impl.RepresentationFactoryTDImplt;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.streamreasoning.rsp4j.api.engine.config.EngineConfiguration;
@@ -30,6 +33,8 @@ import org.streamreasoning.rsp4j.api.stream.data.DataStream;
 import org.streamreasoning.rsp4j.csparql2.engine.CSPARQLEngine;
 import org.streamreasoning.rsp4j.csparql2.engine.JenaContinuousQueryExecution;
 import org.streamreasoning.rsp4j.csparql2.sysout.ResponseFormatterFactory;
+
+import io.vertx.core.Vertx;
 
 
 /**
@@ -59,6 +64,22 @@ public class ContextDomain {
     private final List<String> membershipRuleQueryURLs;
     private final Map<String, JenaContinuousQueryExecution> membershipRuleQueries = new HashMap<>();
     
+    // Facotry for the representation of the ContextDomain
+    private final WebSubConfig notificationConfig = Vertx.currentContext()
+      .owner()
+      .sharedData()
+      .<String, WebSubConfig>getLocalMap("notification-config")
+      .get("default");
+    private HttpInterfaceConfig httpConfig = Vertx.currentContext()
+      .owner()
+      .sharedData()
+      .<String, HttpInterfaceConfig>getLocalMap("http-config")
+      .get("default");
+
+    private RepresentationFactoryTDImplt representationFactory = new RepresentationFactoryTDImplt(
+            this.httpConfig, this.notificationConfig);
+
+
     // RDF store for the graph denoting the ContextDomainGroup memberships
     private SailRepository cdgMembershipRepo;
 
@@ -93,6 +114,13 @@ public class ContextDomain {
         } catch (MalformedURLException | ConfigurationException | URISyntaxException e) {
             LOGGER.error("Error while initializing the RSPQL query engine for the ContextDomain " + contextDomainURI + ": " + e.getMessage());
         }
+    }
+
+    // ContextDomain RDF representation
+    public String getContextDomainRepresentation() {
+        // Transform the list of ContextStreams into a list of their URIs
+        return this.representationFactory.getContextDomainRepresentation(contextDomainURI, getContextDomainGroupURI(), getContextStreamURIs(), 
+                membershipRuleQueryURLs);
     }
 
 
@@ -202,6 +230,108 @@ public class ContextDomain {
             LOGGER.error("Error while retrieving the membership statements of the ContextDomainGroup " + getContextDomainGroupURI() + ": " + e.getMessage());
             return Optional.empty();
         }
+    }
+
+    /**
+     * Get the list of all context stream URIs in this domain
+     * @return List of context stream URIs
+     */
+    public List<String> getContextStreamURIs() {
+        List<String> streamURIs = new ArrayList<>();
+        for (ContextStream stream : contextStreams) {
+            streamURIs.add(stream.getStreamURI());
+        }
+        return streamURIs;
+    }
+
+    /**
+     * Add a new membership rule to this context domain.
+     * This method registers a new RSPQL query with the existing engine.
+     * 
+     * @param membershipRuleQueryURL The URL of the RSPQL query to add
+     * @throws Exception if there's an error registering the query
+     */
+    public void addMembershipRule(String membershipRuleQueryURL) throws Exception {
+        if (membershipRuleQueries.containsKey(membershipRuleQueryURL)) {
+            LOGGER.warn("Membership rule already exists: " + membershipRuleQueryURL);
+            return;
+        }
+
+        try {
+            // Get the SDS configuration from the existing engine
+            String configFilePath = new URI(engineConfigURL).toURL().getPath();
+            SDSConfiguration config = new SDSConfiguration(configFilePath);
+
+            // Register the new query with the engine
+            JenaContinuousQueryExecution cqe = (JenaContinuousQueryExecution)membershipRuleQueryEngine.register(Utils.parseRSPQLQuery(membershipRuleQueryURL), config);
+            var query = cqe.query();
+            query.setConstruct();
+            cqe.addQueryFormatter(ResponseFormatterFactory.getConstructResponseSysOutFormatter("Turtle", false));
+
+            membershipRuleQueries.put(membershipRuleQueryURL, cqe);
+            
+            @SuppressWarnings("unchecked")
+            DataStream<Graph> queryResultStream = (DataStream<Graph>)cqe.outstream();
+            queryResultStream.addConsumer((g, t) -> updateMembershipConsumer(g, t));
+            
+            LOGGER.info("Successfully added membership rule: " + membershipRuleQueryURL + " to context domain: " + contextDomainURI);
+            
+        } catch (Exception e) {
+            LOGGER.error("Error adding membership rule: " + membershipRuleQueryURL + " to context domain: " + contextDomainURI, e);
+            throw e;
+        }
+    }
+
+    /**
+     * Remove a membership rule from this context domain.
+     * This method unregisters the RSPQL query from the existing engine.
+     * 
+     * @param membershipRuleQueryURL The URL of the RSPQL query to remove
+     */
+    public void removeMembershipRule(String membershipRuleQueryURL) {
+        if (!membershipRuleQueries.containsKey(membershipRuleQueryURL)) {
+            LOGGER.warn("Membership rule does not exist: " + membershipRuleQueryURL);
+            return;
+        }
+
+        try {
+                JenaContinuousQueryExecution cqe = membershipRuleQueries.get(membershipRuleQueryURL);
+                // The stream created by the engine is not closed
+                // There is no method to stop the query execution
+                cqe.deleteObservers();
+                LOGGER.info("Deleted the rule " + membershipRuleQueryURL + " but the stream is still running.");
+            } catch (Exception e) {
+                LOGGER.warn("Error stopping query execution for rule: " + membershipRuleQueryURL, e);
+            }
+
+        membershipRuleQueries.remove(membershipRuleQueryURL);
+    }
+
+    /**
+     * Stop all registered queries and clean up resources.
+     * This method should be called when removing a ContextDomain to properly clean up.
+     */
+    public void stopAllQueries() {
+        for (Map.Entry<String, JenaContinuousQueryExecution> entry : membershipRuleQueries.entrySet()) {
+            try {
+                JenaContinuousQueryExecution cqe = entry.getValue();
+                // Not sure this is the right way but i see no other way to stop it
+                cqe.deleteObservers();;
+                LOGGER.info("Stopped query execution for rule: " + entry.getKey());
+            } catch (Exception e) {
+                LOGGER.warn("Error stopping query execution for rule: " + entry.getKey(), e);
+            }
+        }
+        membershipRuleQueries.clear();
+        if (cdgMembershipRepo != null) {
+            try {
+                cdgMembershipRepo.shutDown();
+                LOGGER.info("Shutdown CDG membership repository for domain: " + contextDomainURI);
+            } catch (Exception e) {
+                LOGGER.warn("Error shutting down CDG membership repository for domain: " + contextDomainURI, e);
+            }
+        }
+        LOGGER.info("Stopped queries for ContextDomain: " + contextDomainURI);
     }
 
     // =============================================================================================================

@@ -27,8 +27,8 @@ jacoco {
 
 java {
   toolchain {
-    languageVersion.set(JavaLanguageVersion.of(23))
-    vendor.set(JvmVendorSpec.ORACLE) // Optional: Specify vendor (e.g., Oracle, OpenJDK)
+    languageVersion.set(JavaLanguageVersion.of(21))
+    // vendor.set(JvmVendorSpec.ORACLE) // Optional: Specify vendor (e.g., Oracle, OpenJDK)
   }
   sourceCompatibility = JavaVersion.VERSION_21
   targetCompatibility = JavaVersion.VERSION_21

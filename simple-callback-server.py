@@ -43,9 +43,9 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(response).encode('utf-8'))
 
 def run(server_class=HTTPServer, handler_class=RequestHandler, port=8081):
-    server_address = ('localhost', port)
+    server_address = ('0.0.0.0', port)
     httpd = server_class(server_address, handler_class)
-    print(f"Starting server on localhost:{port}")
+    print(f"Starting server on 0.0.0.0:{port}")
     httpd.serve_forever()
 
 if __name__ == '__main__':

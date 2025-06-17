@@ -44,6 +44,73 @@ public class ContextMessageBox implements Messagebox<ContextMessage> {
                 new GenericMessageCodec<>(ContextMessage.ContextStreamUpdate.class, new ContextManagementMessageMarshaller()));
             this.eventBus.registerDefaultCodec(ContextMessage.VerifyContextStreamSubscription.class, 
                 new GenericMessageCodec<>(ContextMessage.VerifyContextStreamSubscription.class, new ContextManagementMessageMarshaller()));
+            this.eventBus.registerDefaultCodec(
+                ContextMessage.GetContextStreamRepresentation.class,
+                new GenericMessageCodec<>(
+                    ContextMessage.GetContextStreamRepresentation.class, 
+                    new ContextManagementMessageMarshaller()
+                )
+            );
+            
+            // Register the message handler for the ContextDomain representation
+            this.eventBus.registerDefaultCodec(
+                ContextMessage.ContextDomainRepresentation.class,
+                new GenericMessageCodec<>(ContextMessage.ContextDomainRepresentation.class, new ContextManagementMessageMarshaller())
+            );
+            
+            // Register the message handler for the ContainsAssertion validation
+            this.eventBus.registerDefaultCodec(
+                ContextMessage.ContainsAssertion.class,
+                new GenericMessageCodec<>(ContextMessage.ContainsAssertion.class, new ContextManagementMessageMarshaller())
+            );
+            
+            // Register the message handler for adding static context
+            this.eventBus.registerDefaultCodec(
+                ContextMessage.AddStaticContext.class,
+                new GenericMessageCodec<>(ContextMessage.AddStaticContext.class, new ContextManagementMessageMarshaller())
+            );
+            
+            // Register the message handler for adding profiled context
+            this.eventBus.registerDefaultCodec(
+                ContextMessage.AddProfiledContext.class,
+                new GenericMessageCodec<>(ContextMessage.AddProfiledContext.class, new ContextManagementMessageMarshaller())
+            );
+            
+            // Register the message handler for adding context stream
+            this.eventBus.registerDefaultCodec(
+                ContextMessage.AddContextStream.class,
+                new GenericMessageCodec<>(ContextMessage.AddContextStream.class, new ContextManagementMessageMarshaller())
+            );
+            
+            // Register the message handler for removing context stream
+            this.eventBus.registerDefaultCodec(
+                ContextMessage.RemoveContextStream.class,
+                new GenericMessageCodec<>(ContextMessage.RemoveContextStream.class, new ContextManagementMessageMarshaller())
+            );
+            
+            // Register the message handler for adding context domain
+            this.eventBus.registerDefaultCodec(
+                ContextMessage.AddContextDomain.class,
+                new GenericMessageCodec<>(ContextMessage.AddContextDomain.class, new ContextManagementMessageMarshaller())
+            );
+            
+            // Register the message handler for removing context domain
+            this.eventBus.registerDefaultCodec(
+                ContextMessage.RemoveContextDomain.class,
+                new GenericMessageCodec<>(ContextMessage.RemoveContextDomain.class, new ContextManagementMessageMarshaller())
+            );
+            
+            // Register the message handler for adding membership rules
+            this.eventBus.registerDefaultCodec(
+                ContextMessage.AddMembershipRule.class,
+                new GenericMessageCodec<>(ContextMessage.AddMembershipRule.class, new ContextManagementMessageMarshaller())
+            );
+            
+            // Register the message handler for removing membership rules
+            this.eventBus.registerDefaultCodec(
+                ContextMessage.RemoveMembershipRule.class,
+                new GenericMessageCodec<>(ContextMessage.RemoveMembershipRule.class, new ContextManagementMessageMarshaller())
+            );
         }
         else {
             LOGGER.warn("Context Management is not enabled. The context message exchange will not be initialized.");

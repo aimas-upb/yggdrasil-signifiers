@@ -3,11 +3,13 @@ package org.hyperagents.yggdrasil.utils.impl;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Set;
 
 import org.eclipse.rdf4j.model.Model;
 import org.eclipse.rdf4j.model.impl.LinkedHashModel;
 import org.eclipse.rdf4j.model.vocabulary.RDF;
+import org.eclipse.rdf4j.model.IRI;
 import org.hyperagents.yggdrasil.utils.HttpInterfaceConfig;
 import org.hyperagents.yggdrasil.utils.RdfModelUtils;
 import org.hyperagents.yggdrasil.utils.RepresentationFactory;
@@ -25,7 +27,6 @@ import ch.unisg.ics.interactions.wot.td.schemas.ObjectSchema;
 import ch.unisg.ics.interactions.wot.td.schemas.StringSchema;
 import ch.unisg.ics.interactions.wot.td.security.SecurityScheme;
 import io.vertx.core.http.HttpMethod;
-
 /**
  * This class is an implementation of the RepresentationFactory interface. It provides methods to
  * create representations of platforms, workspaces, artifacts, and bodies. The representations are
@@ -61,6 +62,51 @@ public class RepresentationFactoryTDImplt implements RepresentationFactory {
     addAction(td, "update" + type + "Representation", target, PUT, "Update" + type);
     addAction(td, "delete" + type + "Representation", target, DELETE, "Delete" + type);
   }
+  
+  public String getContextDomainRepresentation(
+          String contextDomainURI,
+          String contextDomainGroupURI,
+          List<String> contextStreams,
+          List<String> membershipRuleQueryURLs) {
+
+      // Create the Thing Description builder for the Context Domain
+      final var td = new ThingDescription.Builder("ContextDomain")
+              .addThingURI(contextDomainURI)
+              .addSemanticType(HMAS + "ContextDomain");
+
+        // Add the Context Domain Group as a sub-resource
+        if (contextDomainGroupURI != null) {
+            td.addThingURI(contextDomainGroupURI);
+            td.addSemanticType(HMAS + "ContextDomainGroup");
+            td.addAction(
+                    new ActionAffordance.Builder(
+                            "getContextDomainGroupRepresentation",
+                            new Form.Builder(contextDomainGroupURI)
+                                    .setMethodName(GET)
+                                    .setContentType("application/json")
+                                    .build()
+                    ).addSemanticType(HMAS + "PerceiveContextDomainGroup").build()
+            );
+        }
+        // Add context streams
+        if (contextStreams != null) {
+            for (String stream : contextStreams) {
+                td.addAction(
+                        new ActionAffordance.Builder(
+                                "getContextStream",
+                                new Form.Builder(stream)
+                                        .setMethodName(GET)
+                                        .setContentType("application/json")
+                                        .build()
+                        ).addSemanticType(HMAS + "PerceiveContextStream").build()
+                );
+            }
+        }
+        
+        wrapInResourceProfile(td, contextDomainURI, contextDomainURI + "#contextDomain");
+      return serializeThingDescription(td);
+  }
+
 
   private void addAction(final ThingDescription.Builder thingDescription,
                          final String name,
@@ -173,6 +219,30 @@ public class RepresentationFactoryTDImplt implements RepresentationFactory {
         td
     );
   }
+  
+  public String createContextStreamRepresentation( 
+    final String streamName,
+    final String streamURI,
+    final List<String> contextAssertions
+) {
+    final var td = new ThingDescription.Builder(streamName)
+        .addThingURI(streamURI)
+        .addSemanticType(HMAS + "ContextStream");
+
+    final Model streamMetadata = new LinkedHashModel();
+    IRI streamIri = RdfModelUtils.createIri(streamURI);
+
+    for (String assertionType : contextAssertions) {
+        streamMetadata.add(
+            streamIri,
+            RdfModelUtils.createIri(HMAS + "hasContextAssertion"),
+            RdfModelUtils.createIri(assertionType)
+        );
+    }
+
+    td.addGraph(streamMetadata);
+    return serializeThingDescription(td);
+}
 
   @Override
   public String createWorkspaceRepresentation(
@@ -275,7 +345,6 @@ public class RepresentationFactoryTDImplt implements RepresentationFactory {
         isCartagoArtifact
     );
   }
-
 
   @Override
   public String createArtifactRepresentation(

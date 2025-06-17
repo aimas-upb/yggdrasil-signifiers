@@ -63,26 +63,40 @@ public class Utils {
   }
 
   public static String parseRSPQLQuery(String queryFileURI) {
-    // parse the RSPQL query from the provided file URI, by opening it as a stream and reading its content
+    // parse the RSPQL query from the provided URI, supporting both file:// and http:// schemes
     try {
       URI queryUri = new URI(queryFileURI);
-      StringBuilder queryBuilder;
-        try (FileReader fileReader = new FileReader(new File(queryUri))) {
-            queryBuilder = new StringBuilder();
-            int character;
-            while ((character = fileReader.read()) != -1) {
-                queryBuilder.append((char) character);
-            } }
-      String qString = queryBuilder.toString();
+      StringBuilder queryBuilder = new StringBuilder();
       
-      return qString;
+      if ("file".equals(queryUri.getScheme())) {
+        // Handle file:// URIs
+        try (FileReader fileReader = new FileReader(new File(queryUri))) {
+          int character;
+          while ((character = fileReader.read()) != -1) {
+            queryBuilder.append((char) character);
+          }
+        }
+      } else if ("http".equals(queryUri.getScheme()) || "https".equals(queryUri.getScheme())) {
+        // Handle HTTP/HTTPS URIs
+        try (java.io.InputStream inputStream = queryUri.toURL().openStream();
+             java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(inputStream))) {
+          String line;
+          while ((line = reader.readLine()) != null) {
+            queryBuilder.append(line).append(System.lineSeparator());
+          }
+        }
+      } else {
+        throw new IllegalArgumentException("Unsupported URI scheme: " + queryUri.getScheme() + ". Only file, http, and https are supported.");
+      }
+      
+      return queryBuilder.toString();
 
     } catch (URISyntaxException e) {
-      System.err.println("Error while parsing the RSPQL query from the file URI " + queryFileURI + ": " + e.getMessage());
+      System.err.println("Error while parsing the RSPQL query from the URI " + queryFileURI + ": " + e.getMessage());
       return null;
     }
     catch (IOException e) {
-      System.err.println("Error while parsing the RSPQL query from the file URI " + queryFileURI + ": " + e.getMessage());
+      System.err.println("Error while reading the RSPQL query from the URI " + queryFileURI + ": " + e.getMessage());
       return null;
     }
   }

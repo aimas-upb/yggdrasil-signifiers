@@ -776,6 +776,69 @@ public class ContextMgmtVerticle extends AbstractVerticle {
                                     "Error removing context domain: " + e.getMessage());
                             }
                         }
+                        case ContextMessage.AddMembershipRule addMembershipRule -> {
+                            LOGGER.info("Handling AddMembershipRule request for domain: " + addMembershipRule.contextDomainURI());
+                            try {
+                                String contextDomainURI = addMembershipRule.contextDomainURI();
+                                String membershipRule = addMembershipRule.membershipRule();
+                                
+                                if (!contextDomains.containsKey(contextDomainURI)) {
+                                    LOGGER.warn("Context domain not found: " + contextDomainURI);
+                                    message.fail(HttpStatus.SC_NOT_FOUND, 
+                                        "Context domain not found: " + contextDomainURI);
+                                    return;
+                                }
+
+                                ContextDomain contextDomain = contextDomains.get(contextDomainURI);
+                                try {
+                                    contextDomain.addMembershipRule(membershipRule);
+                                    LOGGER.info("Added membership rule: " + membershipRule + " to domain: " + contextDomainURI);
+                                    message.reply("OK");
+                                } catch (Exception e) {
+                                    LOGGER.error("Failed to add membership rule: " + membershipRule, e);
+                                    message.fail(HttpStatus.SC_INTERNAL_SERVER_ERROR, 
+                                        "Failed to add membership rule: " + e.getMessage());
+                                }
+                                
+                            } catch (Exception e) {
+                                LOGGER.error("Error processing AddMembershipRule request", e);
+                                message.fail(HttpStatus.SC_INTERNAL_SERVER_ERROR, 
+                                    "Error adding membership rule: " + e.getMessage());
+                            }
+                        }
+                        case ContextMessage.RemoveMembershipRule removeMembershipRule -> {
+                            LOGGER.info("Handling RemoveMembershipRule request for domain: " + removeMembershipRule.contextDomainURI());
+                            try {
+                                String contextDomainURI = removeMembershipRule.contextDomainURI();
+                                String membershipRule = removeMembershipRule.membershipRule();
+                                
+                                // Check if the domain exists
+                                if (!contextDomains.containsKey(contextDomainURI)) {
+                                    LOGGER.warn("Context domain not found: " + contextDomainURI);
+                                    message.fail(HttpStatus.SC_NOT_FOUND, 
+                                        "Context domain not found: " + contextDomainURI);
+                                    return;
+                                }
+                                
+                                ContextDomain contextDomain = contextDomains.get(contextDomainURI);
+                                
+                                // Remove the membership rule
+                                try {
+                                    contextDomain.removeMembershipRule(membershipRule);
+                                    LOGGER.info("Removed membership rule: " + membershipRule + " from domain: " + contextDomainURI);
+                                    message.reply("OK");
+                                } catch (Exception e) {
+                                    LOGGER.error("Failed to remove membership rule: " + membershipRule, e);
+                                    message.fail(HttpStatus.SC_INTERNAL_SERVER_ERROR, 
+                                        "Failed to remove membership rule: " + e.getMessage());
+                                }
+                                
+                            } catch (Exception e) {
+                                LOGGER.error("Error processing RemoveMembershipRule request", e);
+                                message.fail(HttpStatus.SC_INTERNAL_SERVER_ERROR, 
+                                    "Error removing membership rule: " + e.getMessage());
+                            }
+                        }
                         default -> {
                             LOGGER.warn("Received an unknown message type: " + message.body().getClass().getName());
                             message.fail(HttpStatus.SC_BAD_REQUEST, "Unknown message type.");

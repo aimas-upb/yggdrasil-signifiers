@@ -31,6 +31,7 @@ public class HttpServerVerticle extends AbstractVerticle {
   private static final String CONTEXT_STREAM_PATH = "/context/streams/:streamid";
 
   private static final String CONTEXT_DOMAIN_PATH = "/context/domains/:domainid";
+  private static final String CONTEXT_DOMAIN_RULES_PATH = "/context/domains/:domainid/rules";
 
   private HttpServer server;
   private EnvironmentConfig environmentConfig;
@@ -249,6 +250,14 @@ public class HttpServerVerticle extends AbstractVerticle {
     final Route removeContextDomain = router.delete(CONTEXT_DOMAIN_PATH)
         .handler(contextHandler::handleRemoveContextDomain);
 
+    final Route addMembershipRule = router.post(CONTEXT_DOMAIN_RULES_PATH)
+        .consumes("application/json")
+        .handler(contextHandler::handleAddMembershipRule);
+
+    final Route removeMembershipRule = router.delete(CONTEXT_DOMAIN_RULES_PATH)
+        .consumes("application/json")
+        .handler(contextHandler::handleRemoveMembershipRule);
+
     final Route contextStreamSubscriptionVerification = router.get("/" + ContextManagementConfig.CONTEXT_STREAMS_PATH)
         .handler(contextHandler::handleVerifyContextStreamSubscription);
     
@@ -271,6 +280,8 @@ public class HttpServerVerticle extends AbstractVerticle {
       contextDomainRepresentation.disable();
       addContextDomain.disable();
       removeContextDomain.disable();
+      addMembershipRule.disable();
+      removeMembershipRule.disable();
       containsAssertionRoute.disable();
       staticContext.disable();
       addStaticContext.disable();

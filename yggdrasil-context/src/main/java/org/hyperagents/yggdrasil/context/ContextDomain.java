@@ -267,11 +267,9 @@ public class ContextDomain {
             var query = cqe.query();
             query.setConstruct();
             cqe.addQueryFormatter(ResponseFormatterFactory.getConstructResponseSysOutFormatter("Turtle", false));
-            
-            // Keep record of the query execution object
-            membershipRuleQueries.put(membershipRuleQueryURL, cqe);
 
-            // Get the result stream and set up the consumer
+            membershipRuleQueries.put(membershipRuleQueryURL, cqe);
+            
             @SuppressWarnings("unchecked")
             DataStream<Graph> queryResultStream = (DataStream<Graph>)cqe.outstream();
             queryResultStream.addConsumer((g, t) -> updateMembershipConsumer(g, t));
@@ -282,6 +280,31 @@ public class ContextDomain {
             LOGGER.error("Error adding membership rule: " + membershipRuleQueryURL + " to context domain: " + contextDomainURI, e);
             throw e;
         }
+    }
+
+    /**
+     * Remove a membership rule from this context domain.
+     * This method unregisters the RSPQL query from the existing engine.
+     * 
+     * @param membershipRuleQueryURL The URL of the RSPQL query to remove
+     */
+    public void removeMembershipRule(String membershipRuleQueryURL) {
+        if (!membershipRuleQueries.containsKey(membershipRuleQueryURL)) {
+            LOGGER.warn("Membership rule does not exist: " + membershipRuleQueryURL);
+            return;
+        }
+
+        try {
+                JenaContinuousQueryExecution cqe = membershipRuleQueries.get(membershipRuleQueryURL);
+                // The stream created by the engine is not closed
+                // There is no method to stop the query execution
+                cqe.deleteObservers();
+                LOGGER.info("Deleted the rule " + membershipRuleQueryURL + " but the stream is still running.");
+            } catch (Exception e) {
+                LOGGER.warn("Error stopping query execution for rule: " + membershipRuleQueryURL, e);
+            }
+
+        membershipRuleQueries.remove(membershipRuleQueryURL);
     }
 
     /**

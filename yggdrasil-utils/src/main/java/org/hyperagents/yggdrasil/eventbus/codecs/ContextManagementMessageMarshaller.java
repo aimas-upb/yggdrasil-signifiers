@@ -67,6 +67,14 @@ public class ContextManagementMessageMarshaller
             case REMOVE_CONTEXT_DOMAIN -> new ContextMessage.RemoveContextDomain(
                 jsonObject.get(MessageFields.CONTEXT_DOMAIN_URI.getName()).getAsString()
             );
+            case ADD_MEMBERSHIP_RULE -> new ContextMessage.AddMembershipRule(
+                jsonObject.get(MessageFields.CONTEXT_DOMAIN_URI.getName()).getAsString(),
+                jsonObject.get(MessageFields.MEMBERSHIP_RULE.getName()).getAsString()
+            );
+            case REMOVE_MEMBERSHIP_RULE -> new ContextMessage.RemoveMembershipRule(
+                jsonObject.get(MessageFields.CONTEXT_DOMAIN_URI.getName()).getAsString(),
+                jsonObject.get(MessageFields.MEMBERSHIP_RULE.getName()).getAsString()
+            );
             default -> throw new JsonParseException("The request method is not valid");
         };
     }
@@ -134,6 +142,16 @@ public class ContextManagementMessageMarshaller
             case ContextMessage.RemoveContextDomain removeContextDomain -> {
                 jsonObject.addProperty(MessageFields.REQUEST_METHOD.getName(), MessageRequestMethods.REMOVE_CONTEXT_DOMAIN.getName());
                 jsonObject.addProperty(MessageFields.CONTEXT_DOMAIN_URI.getName(), removeContextDomain.contextDomainURI());
+            }
+            case ContextMessage.AddMembershipRule addMembershipRule -> {
+                jsonObject.addProperty(MessageFields.REQUEST_METHOD.getName(), MessageRequestMethods.ADD_MEMBERSHIP_RULE.getName());
+                jsonObject.addProperty(MessageFields.CONTEXT_DOMAIN_URI.getName(), addMembershipRule.contextDomainURI());
+                jsonObject.addProperty(MessageFields.MEMBERSHIP_RULE.getName(), addMembershipRule.membershipRule());
+            }
+            case ContextMessage.RemoveMembershipRule removeMembershipRule -> {
+                jsonObject.addProperty(MessageFields.REQUEST_METHOD.getName(), MessageRequestMethods.REMOVE_MEMBERSHIP_RULE.getName());
+                jsonObject.addProperty(MessageFields.CONTEXT_DOMAIN_URI.getName(), removeMembershipRule.contextDomainURI());
+                jsonObject.addProperty(MessageFields.MEMBERSHIP_RULE.getName(), removeMembershipRule.membershipRule());
             }
         }
 

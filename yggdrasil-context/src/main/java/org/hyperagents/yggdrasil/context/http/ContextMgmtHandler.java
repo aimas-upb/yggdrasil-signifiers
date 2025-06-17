@@ -283,7 +283,7 @@ public class ContextMgmtHandler {
       
       td.addAction(
           new ActionAffordance.Builder("addMembershipRule",
-              new Form.Builder(baseUri + "/domains/{domainURI}/rules")
+              new Form.Builder(baseUri + "/domains/:domainURI/rules")
                   .setMethodName("POST")
                   .setContentType("application/json")
                   .build())
@@ -298,7 +298,7 @@ public class ContextMgmtHandler {
       
       td.addAction(
           new ActionAffordance.Builder("removeMembershipRule",
-              new Form.Builder(baseUri + "/domains/rules")
+              new Form.Builder(baseUri + "/domains/:domainURI/rules")
                   .setMethodName("DELETE")
                   .build())
               .addSemanticType("https://purl.org/hmas/RemoveMembershipRuleAction") 
@@ -952,6 +952,168 @@ public class ContextMgmtHandler {
             })
             .onFailure(t -> {
                 LOGGER.error("Error removing context domain: " + fullDomainURI, t);
+                if (t instanceof ReplyException) {
+                    ReplyException re = (ReplyException) t;
+                    context.response()
+                        .setStatusCode(re.failureCode())
+                        .putHeader("Content-Type", "application/json")
+                        .end(new JsonObject().put("error", re.getMessage()).encode());
+                } else {
+                    context.response()
+                        .setStatusCode(500)
+                        .putHeader("Content-Type", "application/json")
+                        .end(new JsonObject().put("error", "Internal server error").encode());
+                }
+            });
+    }
+
+    /**
+     * Method to handle a request to add a membership rule to an existing context domain.
+     * 
+     * @param context The Vert.x routing context of the request
+     */
+    public void handleAddMembershipRule(RoutingContext context) {
+        LOGGER.info("Handling AddMembershipRule action...");
+        
+        String domainId = context.pathParam("domainid");
+        if (domainId == null || domainId.trim().isEmpty()) {
+            LOGGER.warn("Missing domainid path parameter");
+            context.response()
+                .setStatusCode(400)
+                .putHeader("Content-Type", "application/json")
+                .end(new JsonObject().put("error", "Missing required 'domainid' path parameter").encode());
+            return;
+        }
+
+        // Reconstruct full domain URI from path parameter
+        String baseUrl = context.request().absoluteURI().substring(0, 
+            context.request().absoluteURI().lastIndexOf("/context/domains/"));
+        String contextDomainURI = baseUrl + "/context/domains/" + domainId;
+
+        if (!managedContextDomainURIs.contains(contextDomainURI)) {
+            LOGGER.warn("Domain URI is not currently managed: " + contextDomainURI);
+            context.response()
+                .setStatusCode(404)
+                .putHeader("Content-Type", "application/json")
+                .end(new JsonObject().put("error", "Context domain not found or not currently managed").encode());
+            return;
+        }
+
+        JsonObject requestBody = context.body().asJsonObject();
+        if (requestBody == null) {
+            LOGGER.warn("Request body is null");
+            context.response()
+                .setStatusCode(400)
+                .putHeader("Content-Type", "application/json")
+                .end(new JsonObject().put("error", "Request body is required").encode());
+            return;
+        }
+
+        String membershipRule = requestBody.getString("membershipRule");
+        if (membershipRule == null || membershipRule.trim().isEmpty()) {
+            LOGGER.warn("Missing or empty membershipRule in request body");
+            context.response()
+                .setStatusCode(400)
+                .putHeader("Content-Type", "application/json")
+                .end(new JsonObject().put("error", "Missing required 'membershipRule' field").encode());
+            return;
+        }
+
+        this.contextMessageBox.sendMessage(new ContextMessage.AddMembershipRule(contextDomainURI, membershipRule))
+            .onSuccess(r -> {
+                LOGGER.info("Membership rule added successfully to domain: " + contextDomainURI);
+                context.response()
+                    .setStatusCode(200)
+                    .putHeader("Content-Type", "application/json")
+                    .end(new JsonObject()
+                        .put("message", "Membership rule added successfully")
+                        .put("contextDomainURI", contextDomainURI)
+                        .put("membershipRule", membershipRule)
+                        .encode());
+            })
+            .onFailure(t -> {
+                LOGGER.error("Error adding membership rules to domain: " + contextDomainURI, t);
+                if (t instanceof ReplyException) {
+                    ReplyException re = (ReplyException) t;
+                    context.response()
+                        .setStatusCode(re.failureCode())
+                        .putHeader("Content-Type", "application/json")
+                        .end(new JsonObject().put("error", re.getMessage()).encode());
+                } else {
+                    context.response()
+                        .setStatusCode(500)
+                        .putHeader("Content-Type", "application/json")
+                        .end(new JsonObject().put("error", "Internal server error").encode());
+                }
+            });
+    }
+
+    /**
+     * Method to handle a request to remove a membership rule from an existing context domain.
+     * 
+     * @param context The Vert.x routing context of the request
+     */
+    public void handleRemoveMembershipRule(RoutingContext context) {
+        LOGGER.info("Handling RemoveMembershipRule action...");
+        
+        String domainId = context.pathParam("domainid");
+        if (domainId == null || domainId.trim().isEmpty()) {
+            LOGGER.warn("Missing domainid path parameter");
+            context.response()
+                .setStatusCode(400)
+                .putHeader("Content-Type", "application/json")
+                .end(new JsonObject().put("error", "Missing required 'domainid' path parameter").encode());
+            return;
+        }
+
+        // Reconstruct full domain URI from path parameter
+        String baseUrl = context.request().absoluteURI().substring(0, 
+            context.request().absoluteURI().lastIndexOf("/context/domains/"));
+        String contextDomainURI = baseUrl + "/context/domains/" + domainId;
+
+        if (!managedContextDomainURIs.contains(contextDomainURI)) {
+            LOGGER.warn("Domain URI is not currently managed: " + contextDomainURI);
+            context.response()
+                .setStatusCode(404)
+                .putHeader("Content-Type", "application/json")
+                .end(new JsonObject().put("error", "Context domain not found or not currently managed").encode());
+            return;
+        }
+
+        JsonObject requestBody = context.body().asJsonObject();
+        if (requestBody == null) {
+            LOGGER.warn("Request body is null");
+            context.response()
+                .setStatusCode(400)
+                .putHeader("Content-Type", "application/json")
+                .end(new JsonObject().put("error", "Request body is required").encode());
+            return;
+        }
+
+        String membershipRule = requestBody.getString("membershipRule");
+        if (membershipRule == null || membershipRule.trim().isEmpty()) {
+            LOGGER.warn("Missing or empty membershipRule in request body");
+            context.response()
+                .setStatusCode(400)
+                .putHeader("Content-Type", "application/json")
+                .end(new JsonObject().put("error", "Missing required 'membershipRule' field").encode());
+            return;
+        }
+
+        this.contextMessageBox.sendMessage(new ContextMessage.RemoveMembershipRule(contextDomainURI, membershipRule))
+            .onSuccess(r -> {
+                LOGGER.info("Membership rule removed successfully from domain: " + contextDomainURI);
+                context.response()
+                    .setStatusCode(200)
+                    .putHeader("Content-Type", "application/json")
+                    .end(new JsonObject()
+                        .put("message", "Membership rule removed successfully")
+                        .put("contextDomainURI", contextDomainURI)
+                        .put("membershipRule", membershipRule)
+                        .encode());
+            })
+            .onFailure(t -> {
+                LOGGER.error("Error removing membership rule from domain: " + contextDomainURI, t);
                 if (t instanceof ReplyException) {
                     ReplyException re = (ReplyException) t;
                     context.response()

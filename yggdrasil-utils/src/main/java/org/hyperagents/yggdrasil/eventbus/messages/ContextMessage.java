@@ -156,4 +156,28 @@ public sealed interface ContextMessage {
      */
     record RemoveContextDomain(String contextDomainURI) implements ContextMessage {
     }
+
+    /**
+     * A record representing a request to add a membership rule to an existing ContextDomain.
+     * 
+     * <p> The contextDomainURI is the URI of the ContextDomain to add a rule to.
+     * <p> The membershipRule is a URL pointing to an RSPQL query that defines a membership rule.
+     * 
+     * @param contextDomainURI The URI of the ContextDomain to add a rule to.
+     * @param membershipRule URL pointing to an RSPQL query that defines a membership rule.
+     */
+    record AddMembershipRule(String contextDomainURI, String membershipRule) implements ContextMessage {
+    }
+
+    /**
+     * A record representing a request to remove a membership rule from an existing ContextDomain.
+     * 
+     * <p> The contextDomainURI is the URI of the ContextDomain to remove a rule from.
+     * <p> The membershipRule is a URL pointing to an RSPQL query that should be removed.
+     * 
+     * @param contextDomainURI The URI of the ContextDomain to remove a rule from.
+     * @param membershipRule URL pointing to an RSPQL query that should be removed.
+     */
+    record RemoveMembershipRule(String contextDomainURI, String membershipRule) implements ContextMessage {
+    }
 }

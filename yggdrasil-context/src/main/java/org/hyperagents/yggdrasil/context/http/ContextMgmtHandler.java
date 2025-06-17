@@ -19,6 +19,7 @@ import ch.unisg.ics.interactions.wot.td.affordances.ActionAffordance;
 import ch.unisg.ics.interactions.wot.td.affordances.Form;
 import ch.unisg.ics.interactions.wot.td.schemas.ObjectSchema;
 import ch.unisg.ics.interactions.wot.td.schemas.StringSchema;
+import ch.unisg.ics.interactions.wot.td.schemas.BooleanSchema;
 import ch.unisg.ics.interactions.wot.td.security.SecurityScheme;
 import ch.unisg.ics.interactions.wot.td.io.TDGraphWriter;
 import ch.unisg.ics.interactions.wot.td.schemas.ArraySchema;
@@ -173,6 +174,7 @@ public class ContextMgmtHandler {
                   .setContentType("text/turtle")
                   .build())
               .addSemanticType("https://purl.org/hmas/StaticContextProperty")
+              .addOutputSchema(new StringSchema.Builder().build()) // Returns RDF/Turtle content
               .build()
       );
       
@@ -183,6 +185,7 @@ public class ContextMgmtHandler {
                   .setContentType("text/turtle")
                   .build())
               .addSemanticType("https://purl.org/hmas/ProfiledContextProperty")
+              .addOutputSchema(new StringSchema.Builder().build()) // Returns RDF/Turtle content
               .build()
       );
 
@@ -198,6 +201,11 @@ public class ContextMgmtHandler {
                   new ObjectSchema.Builder()
                       .addProperty("type", new StringSchema.Builder().build())
                       .build())
+              .addOutputSchema(
+                  new ObjectSchema.Builder()
+                      .addProperty("contextAssertionType", new StringSchema.Builder().build())
+                      .addProperty("contains", new BooleanSchema.Builder().build())
+                      .build())
               .build()
       );
       
@@ -209,6 +217,11 @@ public class ContextMgmtHandler {
                   .setContentType("text/turtle")
                   .build())
               .addSemanticType("https://purl.org/hmas/AddStaticContextAction")
+              .addOutputSchema(
+                  new ObjectSchema.Builder()
+                      .addProperty("message", new StringSchema.Builder().build())
+                      .addProperty("addedStatements", new StringSchema.Builder().build())
+                      .build())
               .build()
       );
       
@@ -219,6 +232,11 @@ public class ContextMgmtHandler {
                   .setContentType("text/turtle")
                   .build())
               .addSemanticType("https://purl.org/hmas/AddProfiledContextAction")
+              .addOutputSchema(
+                  new ObjectSchema.Builder()
+                      .addProperty("message", new StringSchema.Builder().build())
+                      .addProperty("addedStatements", new StringSchema.Builder().build())
+                      .build())
               .build()
       );
       
@@ -235,6 +253,11 @@ public class ContextMgmtHandler {
                       .addProperty("streamURI", new StringSchema.Builder().build())
                       .addProperty("streamConfig", new ObjectSchema.Builder().build())
                       .build())
+              .addOutputSchema(
+                  new ObjectSchema.Builder()
+                      .addProperty("message", new StringSchema.Builder().build())
+                      .addProperty("streamURI", new StringSchema.Builder().build())
+                      .build())
               .build()
       );
       
@@ -245,6 +268,11 @@ public class ContextMgmtHandler {
                   .build())
               .addSemanticType("https://purl.org/hmas/RemoveContextStreamAction")
               .addUriVariable("streamURI", new StringSchema.Builder().build())
+              .addOutputSchema(
+                  new ObjectSchema.Builder()
+                      .addProperty("message", new StringSchema.Builder().build())
+                      .addProperty("streamURI", new StringSchema.Builder().build())
+                      .build())
               .build()
       );
       
@@ -268,6 +296,11 @@ public class ContextMgmtHandler {
                                     .addItem(new StringSchema.Builder().build()).build())
                                 .build())
                         .build())
+                .addOutputSchema(
+                    new ObjectSchema.Builder()
+                        .addProperty("message", new StringSchema.Builder().build())
+                        .addProperty("contextDomainURI", new StringSchema.Builder().build())
+                        .build())
                 .build()
         );
       
@@ -278,6 +311,11 @@ public class ContextMgmtHandler {
                   .build())
               .addSemanticType("https://purl.org/hmas/RemoveContextDomainAction")
               .addUriVariable("domainURI", new StringSchema.Builder().build())
+              .addOutputSchema(
+                  new ObjectSchema.Builder()
+                      .addProperty("message", new StringSchema.Builder().build())
+                      .addProperty("contextDomainURI", new StringSchema.Builder().build())
+                      .build())
               .build()
       );
       
@@ -291,52 +329,28 @@ public class ContextMgmtHandler {
               .addUriVariable("domainURI", new StringSchema.Builder().build())
               .addInputSchema(
                   new ObjectSchema.Builder()
-                      .addProperty("ruleContent", new StringSchema.Builder().build())
+                      .addProperty("membershipRule", new StringSchema.Builder().build())
                       .build())
-              .build()
-      );
-      
-      td.addAction(
-          new ActionAffordance.Builder("removeMembershipRule",
-              new Form.Builder(baseUri + "/domains/:domainURI/rules")
-                  .setMethodName("DELETE")
-                  .build())
-              .addSemanticType("https://purl.org/hmas/RemoveMembershipRuleAction") 
-              .addUriVariable("domainURI", new StringSchema.Builder().build())
-              .addUriVariable("ruleID", new StringSchema.Builder().build())
-              .build()
-      );
-
-      td.addAction(
-          new ActionAffordance.Builder("validateContextBasedAccess", 
-              new Form.Builder(baseUri + "/access/validate")
-                  .setMethodName("POST")
-                  .setContentType("application/json")
-                  .build())
-              .addSemanticType("https://purl.org/hmas/ValidateContextBasedAccessAction")
-              .addInputSchema(
+              .addOutputSchema(
                   new ObjectSchema.Builder()
-                      .addProperty("accessRequesterURI", new StringSchema.Builder().build())
-                      .addProperty("accessedResourceURI", new StringSchema.Builder().build())
+                      .addProperty("message", new StringSchema.Builder().build())
+                      .addProperty("contextDomainURI", new StringSchema.Builder().build())
+                      .addProperty("membershipRule", new StringSchema.Builder().build())
                       .build())
               .build()
       );
 
-      td.addAction(
-          new ActionAffordance.Builder("updateContextStream",
-              new Form.Builder(baseUri + "/streams/updates")
-                  .setMethodName("POST")
-                  .setContentType("application/json")
-                  .build())
-              .addSemanticType("https://purl.org/hmas/UpdateContextStreamAction")
-              .addInputSchema(
-                  new ObjectSchema.Builder()
-                      .addProperty("streamURI", new StringSchema.Builder().build())
-                      .addProperty("streamContent", new StringSchema.Builder().build())
-                      .addProperty("updateTimestamp", new NumberSchema.Builder().build())
-                      .build())
-              .build()
-      );
+    // This affordance is commented out because it is not successfully implemented
+    //   td.addAction(
+    //       new ActionAffordance.Builder("removeMembershipRule",
+    //           new Form.Builder(baseUri + "/domains/:domainURI/rules")
+    //               .setMethodName("DELETE")
+    //               .build())
+    //           .addSemanticType("https://purl.org/hmas/RemoveMembershipRuleAction") 
+    //           .addUriVariable("domainURI", new StringSchema.Builder().build())
+    //           .addUriVariable("ruleID", new StringSchema.Builder().build())
+    //           .build()
+    //   );
 
       // Add RDF metadata about context management
       Model serviceMetadata = new LinkedHashModel();
